@@ -37,6 +37,7 @@ abstract class AppColors {
   static const Color diffAdvanced     = Color(0xFFFF8C00);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  static const Color transparent = Color(0x00000000);
 
   static Color formScoreColor(double score) {
     if (score >= 85) return scoreGood;
