@@ -1,1 +1,107 @@
-[]
+[
+  {
+    "id": "push_ups",
+    "name": "Push-ups",
+    "muscle_group": "upper_body",
+    "difficulty": "beginner",
+    "default_sets": 3,
+    "default_reps": 12,
+    "duration_minutes": 10,
+    "description": "A foundational upper body exercise that builds chest, shoulder, and tricep strength using only your bodyweight.",
+    "instructions": [
+      "Start in a high plank position with hands shoulder-width apart",
+      "Keep your body in a straight line from head to heels",
+      "Lower your chest to the floor by bending your elbows at 45 degrees",
+      "Push back up to the starting position, fully extending your arms",
+      "Keep your core engaged throughout the movement"
+    ],
+    "common_mistakes": [
+      "Back too curved",
+      "Elbows flaring outward",
+      "Hips sagging",
+      "Neck not neutral",
+      "Incomplete range of motion"
+    ],
+    "muscle_group_tags": ["Chest", "Triceps", "Shoulders", "Core"],
+    "image_path": null
+  },
+  {
+    "id": "squats",
+    "name": "Squats",
+    "muscle_group": "lower_body",
+    "difficulty": "beginner",
+    "default_sets": 3,
+    "default_reps": 15,
+    "duration_minutes": 12,
+    "description": "The king of lower body exercises. Squats build quad, glute, and hamstring strength while improving functional mobility.",
+    "instructions": [
+      "Stand with feet shoulder-width apart, toes slightly turned out",
+      "Keep your chest up and core braced throughout",
+      "Push your hips back and bend your knees to lower down",
+      "Lower until your thighs are parallel to the floor or below",
+      "Drive through your heels to return to standing"
+    ],
+    "common_mistakes": [
+      "Knees caving inward",
+      "Back too curved",
+      "Heels rising off the floor",
+      "Knees not aligned with toes",
+      "Not reaching full depth"
+    ],
+    "muscle_group_tags": ["Quadriceps", "Glutes", "Hamstrings", "Core"],
+    "image_path": null
+  },
+  {
+    "id": "deadlifts",
+    "name": "Deadlifts",
+    "muscle_group": "full_body",
+    "difficulty": "intermediate",
+    "default_sets": 3,
+    "default_reps": 10,
+    "duration_minutes": 15,
+    "description": "A compound movement that trains the entire posterior chain — from your upper back down to your hamstrings and glutes.",
+    "instructions": [
+      "Stand with feet hip-width apart, weight over mid-foot",
+      "Hinge at the hips, keeping your back flat and chest up",
+      "Grip the bar just outside your legs with arms vertical",
+      "Take a deep breath and brace your core before lifting",
+      "Drive through your heels, extending hips and knees simultaneously",
+      "Lock out at the top with hips fully extended, then lower with control"
+    ],
+    "common_mistakes": [
+      "Back too curved",
+      "Bar drifting away from body",
+      "Hips rising faster than shoulders",
+      "Knees not aligned with toes",
+      "Neck not neutral"
+    ],
+    "muscle_group_tags": ["Hamstrings", "Glutes", "Lower Back", "Traps", "Core"],
+    "image_path": null
+  },
+  {
+    "id": "bicep_curls",
+    "name": "Bicep Curls",
+    "muscle_group": "upper_body",
+    "difficulty": "beginner",
+    "default_sets": 3,
+    "default_reps": 12,
+    "duration_minutes": 8,
+    "description": "An isolation exercise targeting the biceps brachii. Essential for building arm strength and definition.",
+    "instructions": [
+      "Stand tall with feet shoulder-width apart, dumbbells at your sides",
+      "Keep your upper arms stationary against your torso",
+      "Curl the weights up by contracting your biceps",
+      "Raise until dumbbells are at shoulder level",
+      "Slowly lower back to the starting position with control"
+    ],
+    "common_mistakes": [
+      "Elbows flaring outward",
+      "Using momentum to swing the weight",
+      "Back too curved",
+      "Incomplete range of motion",
+      "Wrists bent under load"
+    ],
+    "muscle_group_tags": ["Biceps", "Forearms"],
+    "image_path": null
+  }
+]

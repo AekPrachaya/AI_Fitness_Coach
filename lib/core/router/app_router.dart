@@ -5,10 +5,11 @@ import '../theme/typography_preview.dart';
 import '../theme/button_preview.dart';
 import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
+import '../utils/mock_data_test.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/badges-preview',
+    initialLocation: '/mock-data-debug',
     routes: [
       GoRoute(path: '/', builder: (context, state) => const Scaffold()),
       GoRoute(
@@ -26,6 +27,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/badges-preview',
         builder: (context, state) => const BadgesPreview(),
+      ),
+      GoRoute(
+        path: '/mock-data-debug',
+        builder: (context, state) => const MockDataDebugScreen(),
       ),
     ],
   );
