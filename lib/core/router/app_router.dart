@@ -7,6 +7,7 @@ import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
 import '../utils/mock_data_test.dart';
 import '../../features/onboarding/splash_screen.dart';
+import '../../features/onboarding/welcome_screen.dart';
 import 'route_names.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -20,8 +21,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.welcome,
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.onboarding,
         builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Welcome — TODO: Task 2.2')),
+          body: Center(child: Text('Onboarding — TODO: Task 2.3')),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.login,
+        builder: (context, state) => const Scaffold(
+          body: Center(child: Text('Login — TODO: Task 2.7')),
         ),
       ),
       GoRoute(
