@@ -93,7 +93,7 @@ class WelcomeScreen extends StatelessWidget {
                         // Primary CTA — Get Started
                         AppPrimaryButton(
                           label: 'Get Started',
-                          onTap: () => context.go(RouteNames.onboarding),
+                          onTap: () => context.go(RouteNames.personalInfo),
                         )
                             .animate(delay: 500.ms)
                             .fadeIn(duration: 300.ms)

@@ -6,6 +6,7 @@ import '../theme/button_preview.dart';
 import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
 import '../utils/mock_data_test.dart';
+import '../../features/onboarding/personal_info_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
 import 'route_names.dart';
@@ -25,8 +26,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.onboarding,
+        builder: (context, state) => const PersonalInfoScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.personalInfo,
+        builder: (context, state) => const PersonalInfoScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.fitnessGoal,
         builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Onboarding — TODO: Task 2.3')),
+          body: Center(child: Text('Fitness Goal — TODO: Task 2.4')),
         ),
       ),
       GoRoute(
