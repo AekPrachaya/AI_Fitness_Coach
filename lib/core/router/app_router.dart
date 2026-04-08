@@ -6,6 +6,7 @@ import '../theme/button_preview.dart';
 import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
 import '../utils/mock_data_test.dart';
+import '../../features/onboarding/fitness_goal_screen.dart';
 import '../../features/onboarding/personal_info_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
@@ -34,8 +35,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.fitnessGoal,
+        builder: (context, state) => const FitnessGoalScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.fitnessLevel,
         builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Fitness Goal — TODO: Task 2.4')),
+          body: Center(child: Text('Fitness Level — TODO: Task 2.5')),
         ),
       ),
       GoRoute(

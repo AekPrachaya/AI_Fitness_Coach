@@ -56,6 +56,8 @@ class OnboardingState {
   bool get step1Complete =>
       age != null && gender != null && heightCm != null && weightKg != null;
 
+  bool get step2Complete => fitnessGoal != null;
+
   OnboardingState copyWith({
     int? age,
     String? gender,
@@ -111,6 +113,11 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
 
   void toggleWeightUnit() =>
       state = state.copyWith(weightInLbs: !state.weightInLbs);
+
+  // ── Step 2 setters ────────────────────────────────────────────────────────
+
+  void setFitnessGoal(String goal) =>
+      state = state.copyWith(fitnessGoal: goal);
 
   // ── Unit conversion helpers ───────────────────────────────────────────────
 
