@@ -58,6 +58,10 @@ class OnboardingState {
 
   bool get step2Complete => fitnessGoal != null;
 
+  bool get step3Complete => fitnessLevel != null;
+
+  bool get step4Complete => true; // equipment is optional
+
   OnboardingState copyWith({
     int? age,
     String? gender,
@@ -118,6 +122,30 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
 
   void setFitnessGoal(String goal) =>
       state = state.copyWith(fitnessGoal: goal);
+
+  // ── Step 3 setters ────────────────────────────────────────────────────────
+
+  void setFitnessLevel(String level) =>
+      state = state.copyWith(fitnessLevel: level);
+
+  // ── Step 4 setters ────────────────────────────────────────────────────────
+
+  void toggleEquipment(String item) {
+    final current = List<String>.from(state.equipment);
+    if (current.contains(item)) {
+      current.remove(item);
+    } else {
+      if (item == 'no_equipment') {
+        current.clear();
+      } else {
+        current.remove('no_equipment');
+      }
+      current.add(item);
+    }
+    state = state.copyWith(equipment: current);
+  }
+
+  void clearEquipment() => state = state.copyWith(equipment: []);
 
   // ── Unit conversion helpers ───────────────────────────────────────────────
 
