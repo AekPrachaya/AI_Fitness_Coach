@@ -66,19 +66,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _hasNavigated = true;
 
     bool onboardingComplete = false;
+    bool isLoggedIn = false;
     try {
       final box = Hive.box(MockData.boxUserProfile);
       onboardingComplete =
           box.get(MockData.prefOnboardingComplete) as bool? ?? false;
+      isLoggedIn = box.get('is_logged_in', defaultValue: false) as bool;
     } catch (_) {
       // Box not accessible — default to onboarding flow
       onboardingComplete = false;
     }
 
     if (!mounted) return;
-    context.go(
-      onboardingComplete ? RouteNames.home : RouteNames.welcome,
-    );
+    if (!onboardingComplete) {
+      context.go(RouteNames.welcome);
+    } else if (!isLoggedIn) {
+      context.go(RouteNames.login);
+    } else {
+      context.go(RouteNames.home);
+    }
   }
 
   @override

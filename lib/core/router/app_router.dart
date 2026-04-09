@@ -11,6 +11,7 @@ import '../../features/onboarding/equipment_screen.dart';
 import '../../features/onboarding/fitness_goal_screen.dart';
 import '../../features/onboarding/fitness_level_screen.dart';
 import '../../features/onboarding/personal_info_screen.dart';
+import '../../features/auth/login_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
 import 'route_names.dart';
@@ -60,9 +61,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.login,
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Login — TODO: Task 2.7')),
-        ),
+        builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: RouteNames.home,
