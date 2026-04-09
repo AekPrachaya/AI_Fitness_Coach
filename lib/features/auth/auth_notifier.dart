@@ -86,6 +86,46 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Mock register — validates inputs, simulates delay, saves to Hive.
+  Future<void> mockRegister({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    if (name.trim().isEmpty) {
+      state = state.copyWith(errorMessage: 'Please enter your name');
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
+      state = state.copyWith(
+        errorMessage: 'Please enter a valid email address',
+      );
+      return;
+    }
+    if (password.length < 8) {
+      state = state.copyWith(
+        errorMessage: 'Password must be at least 8 characters',
+      );
+      return;
+    }
+
+    state = state.copyWith(isLoading: true, clearError: true);
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+
+    // Save registered user to Hive
+    final box = Hive.box(MockData.boxUserProfile);
+    await box.put('name', name.trim());
+    await box.put('logged_in_email', email.trim());
+    await box.put('is_logged_in', true);
+
+    state = state.copyWith(
+      isLoading: false,
+      isLoggedIn: true,
+      userEmail: email.trim(),
+      userName: name.trim(),
+    );
+  }
+
   /// Check if already logged in (called on app start).
   void checkLoginStatus() {
     final box = Hive.box(MockData.boxUserProfile);
