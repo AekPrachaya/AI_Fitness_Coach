@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import '../../core/utils/mock_data.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OnboardingState
@@ -61,6 +64,8 @@ class OnboardingState {
   bool get step3Complete => fitnessLevel != null;
 
   bool get step4Complete => true; // equipment is optional
+
+  bool get step5Complete => true; // camera is optional — user can skip
 
   OnboardingState copyWith({
     int? age,
@@ -146,6 +151,25 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
   }
 
   void clearEquipment() => state = state.copyWith(equipment: []);
+
+  // ── Step 5 setters ────────────────────────────────────────────────────────
+
+  void setCameraGranted(bool granted) =>
+      state = state.copyWith(cameraGranted: granted);
+
+  /// Saves all collected onboarding data to Hive and marks onboarding as done.
+  Future<void> completeOnboarding() async {
+    final box = Hive.box(MockData.boxUserProfile);
+    await box.put('age', state.age);
+    await box.put('gender', state.gender);
+    await box.put('height_cm', state.heightCm);
+    await box.put('weight_kg', state.weightKg);
+    await box.put('fitness_goal', state.fitnessGoal);
+    await box.put('fitness_level', state.fitnessLevel);
+    await box.put('equipment', state.equipment);
+    await box.put('camera_granted', state.cameraGranted);
+    await box.put(MockData.prefOnboardingComplete, true);
+  }
 
   // ── Unit conversion helpers ───────────────────────────────────────────────
 

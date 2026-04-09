@@ -6,6 +6,7 @@ import '../theme/button_preview.dart';
 import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
 import '../utils/mock_data_test.dart';
+import '../../features/onboarding/camera_permission_screen.dart';
 import '../../features/onboarding/equipment_screen.dart';
 import '../../features/onboarding/fitness_goal_screen.dart';
 import '../../features/onboarding/fitness_level_screen.dart';
@@ -49,9 +50,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.cameraPermission,
+        builder: (context, state) => const CameraPermissionScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.register,
         builder: (context, state) => const Scaffold(
-          body: Center(
-              child: Text('Camera Permission — TODO: Task 2.6')),
+          body: Center(child: Text('Register — TODO: Task 2.8')),
         ),
       ),
       GoRoute(

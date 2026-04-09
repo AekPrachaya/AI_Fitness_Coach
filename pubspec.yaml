@@ -36,6 +36,9 @@ dependencies:
   # Camera
   camera: ^0.10.0
 
+  # Permissions
+  permission_handler: ^11.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
