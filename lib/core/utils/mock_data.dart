@@ -29,6 +29,7 @@ abstract class MockData {
   static const String prefFormHaptic         = 'form_haptic';
   static const String prefWorkoutReminder    = 'workout_reminder';
   static const String prefReminderTime       = 'reminder_time';
+  static const String prefIsGuest            = 'is_guest';
 
   // ── Method 1: Load workouts from bundled JSON ───────────────────────────────
   static Future<List<Workout>> loadWorkouts() async {

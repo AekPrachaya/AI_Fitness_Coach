@@ -133,10 +133,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final isLoggedIn = box.get('is_logged_in', defaultValue: false) as bool;
 
     if (isLoggedIn && email != null) {
+      final name = box.get('name') as String? ?? email.split('@').first;
       state = state.copyWith(
         isLoggedIn: true,
         userEmail: email,
-        userName: email.split('@').first,
+        userName: name,
       );
     }
   }
@@ -146,10 +147,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(clearError: true);
   }
 
+  /// Continue without an account — sets a guest flag in Hive.
+  Future<void> continueAsGuest() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final box = Hive.box(MockData.boxUserProfile);
+    await box.put(MockData.prefIsGuest, true);
+    await box.put('is_logged_in', true);
+    await box.put('name', 'Athlete');
+    state = state.copyWith(
+      isLoading: false,
+      isLoggedIn: true,
+      userName: 'Athlete',
+      userEmail: null,
+    );
+  }
+
+  /// Whether the current session is a guest session (no email).
+  bool get isGuest {
+    final box = Hive.box(MockData.boxUserProfile);
+    return box.get(MockData.prefIsGuest, defaultValue: false) as bool;
+  }
+
   /// Log out — clear Hive auth keys and reset state.
   Future<void> logout() async {
     final box = Hive.box(MockData.boxUserProfile);
     await box.delete('logged_in_email');
+    await box.delete(MockData.prefIsGuest);
     await box.put('is_logged_in', false);
     state = const AuthState();
   }

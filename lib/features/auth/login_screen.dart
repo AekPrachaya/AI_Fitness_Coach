@@ -48,6 +48,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _handleGuest() async {
+    await ref.read(authNotifierProvider.notifier).continueAsGuest();
+    if (mounted) context.go(RouteNames.home);
+  }
+
   void _showForgotPasswordDialog() {
     final textTheme = Theme.of(context).textTheme;
     showDialog<void>(
@@ -373,6 +378,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                   ).animate(delay: 400.ms).fadeIn(duration: 250.ms),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // O. Continue as Guest
+                  AppGhostButton(
+                    label: 'Continue as Guest',
+                    onTap: _handleGuest,
+                  ).animate(delay: 440.ms).fadeIn(duration: 250.ms),
 
                   const SizedBox(height: AppSpacing.xxl),
                 ],

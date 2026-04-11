@@ -6,6 +6,7 @@ import '../theme/button_preview.dart';
 import '../theme/badges_preview.dart';
 import '../theme/components_preview.dart';
 import '../utils/mock_data_test.dart';
+import '../utils/onboarding_debug_screen.dart';
 import '../../features/onboarding/camera_permission_screen.dart';
 import '../../features/onboarding/equipment_screen.dart';
 import '../../features/onboarding/fitness_goal_screen.dart';
@@ -89,6 +90,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/mock-data-debug',
         builder: (context, state) => const MockDataDebugScreen(),
+      ),
+      GoRoute(
+        path: '/debug/onboarding',
+        builder: (context, state) => const OnboardingDebugScreen(),
       ),
     ],
   );

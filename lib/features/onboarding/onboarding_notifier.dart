@@ -168,7 +168,26 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     await box.put('fitness_level', state.fitnessLevel);
     await box.put('equipment', state.equipment);
     await box.put('camera_granted', state.cameraGranted);
+    await box.put('joined_at', DateTime.now().toIso8601String());
     await box.put(MockData.prefOnboardingComplete, true);
+  }
+
+  /// Reloads saved onboarding data from Hive (used by Settings screen).
+  void loadFromHive() {
+    final box = Hive.box(MockData.boxUserProfile);
+    state = OnboardingState(
+      age: box.get('age') as int?,
+      gender: box.get('gender') as String?,
+      heightCm: (box.get('height_cm') as num?)?.toDouble(),
+      weightKg: (box.get('weight_kg') as num?)?.toDouble(),
+      fitnessGoal: box.get('fitness_goal') as String?,
+      fitnessLevel: box.get('fitness_level') as String?,
+      equipment: List<String>.from(
+        box.get('equipment', defaultValue: <String>[]) as List,
+      ),
+      cameraGranted:
+          box.get('camera_granted', defaultValue: false) as bool,
+    );
   }
 
   // ── Unit conversion helpers ───────────────────────────────────────────────
