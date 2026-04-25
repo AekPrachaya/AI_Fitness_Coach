@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../../../core/services/form_analyzer.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/theme/app_colors.dart';
@@ -23,10 +24,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
   final _poseService = PoseDetectionService();
   final _repCounter = RepCounter();
+  final _formAnalyzer = FormAnalyzer();
   List<Pose> _poses = [];
   Size _absoluteImageSize = Size.zero;
   String _kneeAngleText = '--';
   int _repCount = 0;
+  FormResult _formResult = const FormResult(score: FormScore.good, feedback: '');
 
   @override
   void initState() {
@@ -70,6 +73,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
     String angleText = '--';
     int repCount = _repCount;
+    FormResult formResult = _formResult;
 
     if (poses.isNotEmpty) {
       final lms = poses.first.landmarks;
@@ -82,6 +86,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         angleText = '${angle.toStringAsFixed(0)}°';
         _repCounter.update(angle);
         repCount = _repCounter.count;
+        formResult = _formAnalyzer.analyze(poses.first, angle);
       }
     }
 
@@ -90,6 +95,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       _absoluteImageSize = absSize;
       _kneeAngleText = angleText;
       _repCount = repCount;
+      _formResult = formResult;
     });
   }
 
@@ -143,6 +149,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             child: _buildTopBar(context),
           ),
 
+          // Form feedback banner (shown only when in squat range)
+          if (_formResult.feedback.isNotEmpty)
+            Positioned(
+              left: AppSpacing.md,
+              right: AppSpacing.md,
+              bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
+              child: _buildFormBanner(context),
+            ),
+
           // Bottom HUD
           Positioned(
             left: AppSpacing.md,
@@ -178,6 +193,46 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           const Spacer(),
           // Placeholder for symmetry
           const SizedBox(width: 48),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormBanner(BuildContext context) {
+    final color = switch (_formResult.score) {
+      FormScore.good => AppColors.scoreGood,
+      FormScore.fair => AppColors.scoreOk,
+      FormScore.poor => AppColors.scorePoor,
+    };
+    final icon = switch (_formResult.score) {
+      FormScore.good => Icons.check_circle_rounded,
+      FormScore.fair => Icons.warning_amber_rounded,
+      FormScore.poor => Icons.cancel_rounded,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              _formResult.feedback,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
         ],
       ),
     );
