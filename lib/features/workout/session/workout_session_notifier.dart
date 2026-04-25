@@ -81,16 +81,12 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final _poseService = PoseDetectionService();
   final _repCounter = RepCounter();
   final _formAnalyzer = FormAnalyzer();
-
-  List<CameraDescription> _cameras = [];
-  final int _cameraIndex = 0;
   Timer? _restTimer;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  Future<void> startSession(List<CameraDescription> cameras) async {
+  Future<void> startSession() async {
     if (state.status != SessionStatus.idle) return;
-    _cameras = cameras;
     state = state.copyWith(status: SessionStatus.initializing);
   }
 
@@ -100,10 +96,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
   }
 
-  void processFrame(CameraImage image) async {
+  void processFrame(CameraImage image, CameraDescription camera) async {
     if (state.status != SessionStatus.tracking) return;
 
-    final camera = _cameras[_cameraIndex];
     final poses = await _poseService.processFrame(image, camera);
     if (poses == null) return;
 

@@ -20,6 +20,8 @@ class WorkoutSessionScreen extends ConsumerStatefulWidget {
 class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
+  int _cameraIndex = 0;
+  bool _isSwitching = false;
 
   @override
   void initState() {
@@ -32,8 +34,23 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     _cameras = await availableCameras();
     if (_cameras.isEmpty) return;
 
+    // Default to front camera so user can see themselves
+    _cameraIndex = _cameras.indexWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+    );
+    if (_cameraIndex < 0) _cameraIndex = 0;
+
+    await _startCamera(_cameraIndex);
+
+    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
+    await notifier.startSession();
+    notifier.onCameraReady();
+  }
+
+  Future<void> _startCamera(int index) async {
+    final camera = _cameras[index];
     final controller = CameraController(
-      _cameras[0],
+      camera,
       ResolutionPreset.medium,
       imageFormatGroup: ImageFormatGroup.bgra8888,
       enableAudio: false,
@@ -45,11 +62,23 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     }
     setState(() => _controller = controller);
 
-    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
-    await notifier.startSession(_cameras);
-    notifier.onCameraReady();
+    controller.startImageStream((image) {
+      ref.read(workoutSessionNotifierProvider.notifier).processFrame(image, camera);
+    });
+  }
 
-    controller.startImageStream(notifier.processFrame);
+  Future<void> _switchCamera() async {
+    if (_isSwitching || _cameras.length < 2) return;
+    setState(() => _isSwitching = true);
+
+    await _controller?.stopImageStream();
+    await _controller?.dispose();
+    setState(() => _controller = null);
+
+    _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+    await _startCamera(_cameraIndex);
+
+    if (mounted) setState(() => _isSwitching = false);
   }
 
   @override
@@ -77,8 +106,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       );
     }
 
-    final isFront = _cameras[0].lensDirection == CameraLensDirection.front;
-    final rot = _cameras[0].sensorOrientation;
+    final isFront =
+        _cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
+    final rot = _cameras[_cameraIndex].sensorOrientation;
     final absSize = (rot == 90 || rot == 270)
         ? Size(
             controller.value.previewSize!.height,
@@ -174,6 +204,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           ),
           const Spacer(),
           // Pause / Resume
+          IconButton(
+            icon: const Icon(Icons.flip_camera_ios_rounded,
+                color: AppColors.textPrimary),
+            onPressed: _isSwitching ? null : _switchCamera,
+          ),
           IconButton(
             icon: Icon(
               session.status == SessionStatus.paused
