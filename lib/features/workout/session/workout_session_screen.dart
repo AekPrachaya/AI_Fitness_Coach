@@ -108,16 +108,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
 
     final isFront =
         _cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
-    final rot = _cameras[_cameraIndex].sensorOrientation;
-    final absSize = (rot == 90 || rot == 270)
-        ? Size(
-            controller.value.previewSize!.height,
-            controller.value.previewSize!.width,
-          )
-        : Size(
-            controller.value.previewSize!.width,
-            controller.value.previewSize!.height,
-          );
+    // Use size from state — computed from actual CameraImage in processFrame
+    final absSize = session.absoluteImageSize;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -128,7 +120,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           CameraPreview(controller),
 
           // Skeleton overlay
-          if (session.poses.isNotEmpty)
+          if (session.poses.isNotEmpty && absSize != Size.zero)
             CustomPaint(
               painter: PoseOverlayPainter(
                 poses: session.poses,

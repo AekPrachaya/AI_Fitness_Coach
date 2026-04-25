@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
@@ -33,6 +34,7 @@ class WorkoutSessionState {
     this.formResult,
     this.errorMessage,
     this.poses = const [],
+    this.absoluteImageSize = Size.zero,
   });
 
   final SessionStatus status;
@@ -46,6 +48,10 @@ class WorkoutSessionState {
   final String? errorMessage;
   final List<Pose> poses;
 
+  /// Size of the image in its upright (portrait) orientation,
+  /// derived from the actual CameraImage passed to ML Kit.
+  final Size absoluteImageSize;
+
   WorkoutSessionState copyWith({
     SessionStatus? status,
     int? currentSet,
@@ -57,6 +63,7 @@ class WorkoutSessionState {
     FormResult? formResult,
     String? errorMessage,
     List<Pose>? poses,
+    Size? absoluteImageSize,
   }) {
     return WorkoutSessionState(
       status: status ?? this.status,
@@ -69,6 +76,7 @@ class WorkoutSessionState {
       formResult: formResult ?? this.formResult,
       errorMessage: errorMessage,
       poses: poses ?? this.poses,
+      absoluteImageSize: absoluteImageSize ?? this.absoluteImageSize,
     );
   }
 }
@@ -102,9 +110,19 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final poses = await _poseService.processFrame(image, camera);
     if (poses == null) return;
 
+    // Compute portrait-corrected size from actual CameraImage (not previewSize)
+    final rot = camera.sensorOrientation;
+    final absSize = (rot == 90 || rot == 270)
+        ? Size(image.height.toDouble(), image.width.toDouble())
+        : Size(image.width.toDouble(), image.height.toDouble());
+
     if (poses.isEmpty) {
-      // Body lost for a full second is handled by caller watching state
-      state = state.copyWith(poses: [], kneeAngle: null, formResult: null);
+      state = state.copyWith(
+        poses: [],
+        kneeAngle: null,
+        formResult: null,
+        absoluteImageSize: absSize,
+      );
       return;
     }
 
@@ -134,6 +152,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
           poses: poses,
           kneeAngle: angle,
           formResult: form,
+          absoluteImageSize: absSize,
         );
         // Brief repComplete flash, then back to tracking
         await Future.delayed(const Duration(milliseconds: 600));
@@ -149,6 +168,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       kneeAngle: angle,
       formResult: form,
       repCount: _repCounter.count,
+      absoluteImageSize: absSize,
     );
   }
 
