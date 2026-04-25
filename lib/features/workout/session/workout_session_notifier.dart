@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../../../core/services/form_analyzer.dart';
@@ -116,6 +117,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         ? Size(image.height.toDouble(), image.width.toDouble())
         : Size(image.width.toDouble(), image.height.toDouble());
 
+    debugPrint('[DEBUG] CameraImage: ${image.width}×${image.height} | '
+        'sensorOrientation: $rot | absSize: $absSize');
+
     if (poses.isEmpty) {
       state = state.copyWith(
         poses: [],
@@ -127,6 +131,16 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     final lms = poses.first.landmarks;
+    final nose = lms[PoseLandmarkType.nose];
+    if (nose != null) {
+      debugPrint('[DEBUG] nose: (${nose.x.toStringAsFixed(1)}, ${nose.y.toStringAsFixed(1)}) '
+          'likelihood: ${nose.likelihood.toStringAsFixed(2)}');
+    }
+    final lShoulder = lms[PoseLandmarkType.leftShoulder];
+    if (lShoulder != null) {
+      debugPrint('[DEBUG] leftShoulder: (${lShoulder.x.toStringAsFixed(1)}, ${lShoulder.y.toStringAsFixed(1)})');
+    }
+
     final hip = lms[PoseLandmarkType.leftHip];
     final knee = lms[PoseLandmarkType.leftKnee];
     final ankle = lms[PoseLandmarkType.leftAnkle];

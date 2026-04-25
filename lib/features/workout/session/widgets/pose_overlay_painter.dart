@@ -83,11 +83,7 @@ class PoseOverlayPainter extends CustomPainter {
     final x = isFrontCamera
         ? (absoluteImageSize.width - lm.x) * sx
         : lm.x * sx;
-    // Front camera uses 270° CW rotation → ML Kit Y-axis is inverted vs display
-    final y = isFrontCamera
-        ? (absoluteImageSize.height - lm.y) * sy
-        : lm.y * sy;
-    return Offset(x, y);
+    return Offset(x, lm.y * sy);
   }
 
   @override
