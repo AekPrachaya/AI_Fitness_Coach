@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../../../core/services/pose_detection_service.dart';
+import '../../../core/services/rep_counter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/angle_calculator.dart';
@@ -21,9 +22,11 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   final int _cameraIndex = 0;
 
   final _poseService = PoseDetectionService();
+  final _repCounter = RepCounter();
   List<Pose> _poses = [];
   Size _absoluteImageSize = Size.zero;
   String _kneeAngleText = '--';
+  int _repCount = 0;
 
   @override
   void initState() {
@@ -66,6 +69,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         : Size(image.width.toDouble(), image.height.toDouble());
 
     String angleText = '--';
+    int repCount = _repCount;
+
     if (poses.isNotEmpty) {
       final lms = poses.first.landmarks;
       final hip = lms[PoseLandmarkType.leftHip];
@@ -75,6 +80,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           hip.likelihood > 0.5 && knee.likelihood > 0.5 && ankle.likelihood > 0.5) {
         final angle = calculateAngle(hip, knee, ankle);
         angleText = '${angle.toStringAsFixed(0)}°';
+        _repCounter.update(angle);
+        repCount = _repCounter.count;
       }
     }
 
@@ -82,6 +89,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       _poses = poses;
       _absoluteImageSize = absSize;
       _kneeAngleText = angleText;
+      _repCount = repCount;
     });
   }
 
@@ -189,12 +197,14 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
+          _hudItem(context, 'Reps', '$_repCount'),
+          Container(width: 1, height: 40, color: AppColors.divider),
           _hudItem(context, 'เข่า (องศา)', _kneeAngleText),
           Container(width: 1, height: 40, color: AppColors.divider),
           _hudItem(
             context,
             'สถานะ',
-            _poses.isEmpty ? 'ไม่เจอร่างกาย' : 'ตรวจจับได้',
+            _poses.isEmpty ? 'ไม่เจอ' : 'พบแล้ว',
             valueColor: _poses.isEmpty ? AppColors.error : AppColors.success,
           ),
         ],
