@@ -1,35 +1,25 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/form_analyzer.dart';
-import '../../../core/services/pose_detection_service.dart';
-import '../../../core/services/rep_counter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/angle_calculator.dart';
 import 'widgets/pose_overlay_painter.dart';
+import 'widgets/rest_overlay.dart';
+import 'workout_session_notifier.dart';
 
-class WorkoutSessionScreen extends StatefulWidget {
+class WorkoutSessionScreen extends ConsumerStatefulWidget {
   const WorkoutSessionScreen({super.key});
 
   @override
-  State<WorkoutSessionScreen> createState() => _WorkoutSessionScreenState();
+  ConsumerState<WorkoutSessionScreen> createState() =>
+      _WorkoutSessionScreenState();
 }
 
-class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
-  List<CameraDescription> _cameras = [];
+class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
   CameraController? _controller;
-  final int _cameraIndex = 0;
-
-  final _poseService = PoseDetectionService();
-  final _repCounter = RepCounter();
-  final _formAnalyzer = FormAnalyzer();
-  List<Pose> _poses = [];
-  Size _absoluteImageSize = Size.zero;
-  String _kneeAngleText = '--';
-  int _repCount = 0;
-  FormResult _formResult = const FormResult(score: FormScore.good, feedback: '');
+  List<CameraDescription> _cameras = [];
 
   @override
   void initState() {
@@ -41,12 +31,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   Future<void> _initCamera() async {
     _cameras = await availableCameras();
     if (_cameras.isEmpty) return;
-    await _startCamera(_cameras[_cameraIndex]);
-  }
 
-  Future<void> _startCamera(CameraDescription camera) async {
     final controller = CameraController(
-      camera,
+      _cameras[0],
       ResolutionPreset.medium,
       imageFormatGroup: ImageFormatGroup.bgra8888,
       enableAudio: false,
@@ -57,61 +44,31 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       return;
     }
     setState(() => _controller = controller);
-    controller.startImageStream(_onFrame);
-  }
 
-  void _onFrame(CameraImage image) async {
-    final camera = _cameras[_cameraIndex];
-    final poses = await _poseService.processFrame(image, camera);
-    if (poses == null || !mounted) return;
+    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
+    await notifier.startSession(_cameras);
+    notifier.onCameraReady();
 
-    // Derive portrait-orientation size from raw image + sensor rotation
-    final rot = camera.sensorOrientation;
-    final absSize = (rot == 90 || rot == 270)
-        ? Size(image.height.toDouble(), image.width.toDouble())
-        : Size(image.width.toDouble(), image.height.toDouble());
-
-    String angleText = '--';
-    int repCount = _repCount;
-    FormResult formResult = _formResult;
-
-    if (poses.isNotEmpty) {
-      final lms = poses.first.landmarks;
-      final hip = lms[PoseLandmarkType.leftHip];
-      final knee = lms[PoseLandmarkType.leftKnee];
-      final ankle = lms[PoseLandmarkType.leftAnkle];
-      if (hip != null && knee != null && ankle != null &&
-          hip.likelihood > 0.5 && knee.likelihood > 0.5 && ankle.likelihood > 0.5) {
-        final angle = calculateAngle(hip, knee, ankle);
-        angleText = '${angle.toStringAsFixed(0)}°';
-        _repCounter.update(angle);
-        repCount = _repCounter.count;
-        formResult = _formAnalyzer.analyze(poses.first, angle);
-      }
-    }
-
-    setState(() {
-      _poses = poses;
-      _absoluteImageSize = absSize;
-      _kneeAngleText = angleText;
-      _repCount = repCount;
-      _formResult = formResult;
-    });
+    controller.startImageStream(notifier.processFrame);
   }
 
   @override
   void dispose() {
     _controller?.stopImageStream();
     _controller?.dispose();
-    _poseService.dispose();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(workoutSessionNotifierProvider);
+    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
+
+    if (controller == null || !controller.value.isInitialized ||
+        session.status == SessionStatus.idle ||
+        session.status == SessionStatus.initializing) {
       return const Scaffold(
         backgroundColor: AppColors.background,
         body: Center(
@@ -120,8 +77,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       );
     }
 
-    final isFront =
-        _cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
+    final isFront = _cameras[0].lensDirection == CameraLensDirection.front;
+    final rot = _cameras[0].sensorOrientation;
+    final absSize = (rot == 90 || rot == 270)
+        ? Size(
+            controller.value.previewSize!.height,
+            controller.value.previewSize!.width,
+          )
+        : Size(
+            controller.value.previewSize!.width,
+            controller.value.previewSize!.height,
+          );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -132,11 +98,11 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           CameraPreview(controller),
 
           // Skeleton overlay
-          if (_poses.isNotEmpty && _absoluteImageSize != Size.zero)
+          if (session.poses.isNotEmpty)
             CustomPaint(
               painter: PoseOverlayPainter(
-                poses: _poses,
-                absoluteImageSize: _absoluteImageSize,
+                poses: session.poses,
+                absoluteImageSize: absSize,
                 isFrontCamera: isFront,
               ),
             ),
@@ -146,31 +112,47 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             top: MediaQuery.of(context).padding.top,
             left: 0,
             right: 0,
-            child: _buildTopBar(context),
+            child: _buildTopBar(context, session, notifier),
           ),
 
-          // Form feedback banner (shown only when in squat range)
-          if (_formResult.feedback.isNotEmpty)
+          // Form feedback banner
+          if (session.formResult != null &&
+              session.formResult!.feedback.isNotEmpty &&
+              session.status == SessionStatus.tracking)
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
               bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
-              child: _buildFormBanner(context),
+              child: _buildFormBanner(context, session),
             ),
 
           // Bottom HUD
-          Positioned(
-            left: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
-            child: _buildHud(context),
-          ),
+          if (session.status != SessionStatus.resting)
+            Positioned(
+              left: AppSpacing.md,
+              right: AppSpacing.md,
+              bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
+              child: _buildHud(context, session, notifier),
+            ),
+
+          // Rest overlay (full screen)
+          if (session.status == SessionStatus.resting)
+            RestOverlay(
+              secondsLeft: session.restSecondsLeft,
+              currentSet: session.currentSet + 1,
+              targetSets: session.targetSets,
+              onSkip: notifier.skipRest,
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
+  Widget _buildTopBar(
+    BuildContext context,
+    WorkoutSessionState session,
+    WorkoutSessionNotifier notifier,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -185,26 +167,37 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           ),
           const Spacer(),
           Text(
-            'Squat',
+            'Squat  •  Set ${session.currentSet}/${session.targetSets}',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
                 ),
           ),
           const Spacer(),
-          // Placeholder for symmetry
-          const SizedBox(width: 48),
+          // Pause / Resume
+          IconButton(
+            icon: Icon(
+              session.status == SessionStatus.paused
+                  ? Icons.play_arrow_rounded
+                  : Icons.pause_rounded,
+              color: AppColors.textPrimary,
+            ),
+            onPressed: session.status == SessionStatus.paused
+                ? notifier.resume
+                : notifier.pause,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFormBanner(BuildContext context) {
-    final color = switch (_formResult.score) {
+  Widget _buildFormBanner(BuildContext context, WorkoutSessionState session) {
+    final result = session.formResult!;
+    final color = switch (result.score) {
       FormScore.good => AppColors.scoreGood,
       FormScore.fair => AppColors.scoreOk,
       FormScore.poor => AppColors.scorePoor,
     };
-    final icon = switch (_formResult.score) {
+    final icon = switch (result.score) {
       FormScore.good => Icons.check_circle_rounded,
       FormScore.fair => Icons.warning_amber_rounded,
       FormScore.poor => Icons.cancel_rounded,
@@ -226,7 +219,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              _formResult.feedback,
+              result.feedback,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: color,
                     fontWeight: FontWeight.w600,
@@ -238,7 +231,16 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     );
   }
 
-  Widget _buildHud(BuildContext context) {
+  Widget _buildHud(
+    BuildContext context,
+    WorkoutSessionState session,
+    WorkoutSessionNotifier notifier,
+  ) {
+    final angleText = session.kneeAngle != null
+        ? '${session.kneeAngle!.toStringAsFixed(0)}°'
+        : '--';
+    final bodyFound = session.poses.isNotEmpty;
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -252,15 +254,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _hudItem(context, 'Reps', '$_repCount'),
+          _hudItem(context, 'Reps', '${session.repCount}'),
           Container(width: 1, height: 40, color: AppColors.divider),
-          _hudItem(context, 'เข่า (องศา)', _kneeAngleText),
+          _hudItem(context, 'เข่า (องศา)', angleText),
           Container(width: 1, height: 40, color: AppColors.divider),
           _hudItem(
             context,
             'สถานะ',
-            _poses.isEmpty ? 'ไม่เจอ' : 'พบแล้ว',
-            valueColor: _poses.isEmpty ? AppColors.error : AppColors.success,
+            bodyFound ? 'พบแล้ว' : 'ไม่เจอ',
+            valueColor: bodyFound ? AppColors.success : AppColors.error,
           ),
         ],
       ),
