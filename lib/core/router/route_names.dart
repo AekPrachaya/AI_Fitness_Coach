@@ -9,5 +9,6 @@ abstract class RouteNames {
   static const String cameraPermission  = '/onboarding/camera-permission';
   static const String register          = '/register';
   static const String login             = '/login';
-  static const String home          = '/home';
+  static const String home              = '/home';
+  static const String workoutSession    = '/workout/session';
 }

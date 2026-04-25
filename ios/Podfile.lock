@@ -1,4 +1,6 @@
 PODS:
+  - camera_avfoundation (0.0.1):
+    - Flutter
   - Flutter (1.0.0)
   - google_mlkit_commons (0.8.1):
     - Flutter
@@ -71,12 +73,20 @@ PODS:
     - nanopb/encode (= 2.30910.0)
   - nanopb/decode (2.30910.0)
   - nanopb/encode (2.30910.0)
+  - permission_handler_apple (9.3.0):
+    - Flutter
   - PromisesObjC (2.4.0)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
 
 DEPENDENCIES:
+  - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
   - Flutter (from `Flutter`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_pose_detection (from `.symlinks/plugins/google_mlkit_pose_detection/ios`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
 
 SPEC REPOS:
   trunk:
@@ -97,14 +107,21 @@ SPEC REPOS:
     - PromisesObjC
 
 EXTERNAL SOURCES:
+  camera_avfoundation:
+    :path: ".symlinks/plugins/camera_avfoundation/ios"
   Flutter:
     :path: Flutter
   google_mlkit_commons:
     :path: ".symlinks/plugins/google_mlkit_commons/ios"
   google_mlkit_pose_detection:
     :path: ".symlinks/plugins/google_mlkit_pose_detection/ios"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
 
 SPEC CHECKSUMS:
+  camera_avfoundation: 5675ca25298b6f81fa0a325188e7df62cc217741
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   google_mlkit_commons: 414fc36ac51758c806381de33a1d148d2ba71ce4
   google_mlkit_pose_detection: d09751c1c6abb9769d0c223d2352c82298aa3fb0
@@ -122,7 +139,9 @@ SPEC CHECKSUMS:
   MLKitVision: e858c5f125ecc288e4a31127928301eaba9ae0c1
   MLKitXenoCommon: 39060e7a54769d97a877152c59a1898e7f8d9e35
   nanopb: 438bc412db1928dac798aa6fd75726007be04262
+  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
 

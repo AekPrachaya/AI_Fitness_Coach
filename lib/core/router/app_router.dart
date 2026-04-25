@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/typography_preview.dart';
@@ -16,6 +15,8 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
+import '../../features/home/home_screen.dart';
+import '../../features/workout/session/workout_session_screen.dart';
 import 'route_names.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -65,9 +66,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.home,
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Home — TODO')),
-        ),
+        builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.workoutSession,
+        builder: (context, state) => const WorkoutSessionScreen(),
       ),
 
       // ── Development / debug routes ──────────────────────────────────────
