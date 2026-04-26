@@ -31,7 +31,12 @@ class PoseDetectionService {
   }
 
   InputImage? _toInputImage(CameraImage image, CameraDescription camera) {
-    final rotation = _inputRotation(camera.sensorOrientation);
+    // iOS BGRA8888 stream delivers images already in portrait orientation
+    // (height > width), so no rotation is needed — passing rotation90deg
+    // would double-rotate the coordinates.
+    final rotation = (Platform.isIOS && image.height > image.width)
+        ? InputImageRotation.rotation0deg
+        : _inputRotation(camera.sensorOrientation);
 
     if (Platform.isIOS) {
       final plane = image.planes[0];

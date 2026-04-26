@@ -2,6 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/route_names.dart';
 import '../../../core/services/form_analyzer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -95,6 +97,18 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     final notifier = ref.read(workoutSessionNotifierProvider.notifier);
     final controller = _controller;
 
+    ref.listen<WorkoutSessionState>(workoutSessionNotifierProvider, (prev, next) {
+      if (next.status == SessionStatus.finished &&
+          prev?.status != SessionStatus.finished) {
+        context.go(RouteNames.workoutSummary, extra: {
+          'setsCompleted': next.currentSet,
+          'targetSets': next.targetSets,
+          'totalReps': next.totalReps,
+          'exerciseName': 'Squat',
+        });
+      }
+    });
+
     if (controller == null || !controller.value.isInitialized ||
         session.status == SessionStatus.idle ||
         session.status == SessionStatus.initializing) {
@@ -185,7 +199,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                 color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
           ),
           const Spacer(),
           Text(

@@ -17,6 +17,7 @@ import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/workout/session/workout_session_screen.dart';
+import '../../features/workout/session/workout_summary_screen.dart';
 import 'route_names.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -71,6 +72,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.workoutSession,
         builder: (context, state) => const WorkoutSessionScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.workoutSummary,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return WorkoutSummaryScreen(
+            setsCompleted: extra['setsCompleted'] as int,
+            targetSets: extra['targetSets'] as int,
+            totalReps: extra['totalReps'] as int,
+            exerciseName: extra['exerciseName'] as String,
+          );
+        },
       ),
 
       // ── Development / debug routes ──────────────────────────────────────

@@ -80,10 +80,7 @@ class PoseOverlayPainter extends CustomPainter {
   }
 
   Offset _point(PoseLandmark lm, double sx, double sy, double canvasWidth) {
-    final x = isFrontCamera
-        ? (absoluteImageSize.width - lm.x) * sx
-        : lm.x * sx;
-    return Offset(x, lm.y * sy);
+    return Offset(lm.x * sx, lm.y * sy);
   }
 
   @override

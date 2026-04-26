@@ -11,4 +11,5 @@ abstract class RouteNames {
   static const String login             = '/login';
   static const String home              = '/home';
   static const String workoutSession    = '/workout/session';
+  static const String workoutSummary    = '/workout/summary';
 }

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../../../core/services/form_analyzer.dart';
@@ -30,6 +29,7 @@ class WorkoutSessionState {
     this.targetSets = 3,
     this.targetReps = 10,
     this.repCount = 0,
+    this.totalReps = 0,
     this.restSecondsLeft = 60,
     this.kneeAngle,
     this.formResult,
@@ -43,6 +43,7 @@ class WorkoutSessionState {
   final int targetSets;
   final int targetReps;
   final int repCount;
+  final int totalReps;
   final int restSecondsLeft;
   final double? kneeAngle;
   final FormResult? formResult;
@@ -59,6 +60,7 @@ class WorkoutSessionState {
     int? targetSets,
     int? targetReps,
     int? repCount,
+    int? totalReps,
     int? restSecondsLeft,
     double? kneeAngle,
     FormResult? formResult,
@@ -72,6 +74,7 @@ class WorkoutSessionState {
       targetSets: targetSets ?? this.targetSets,
       targetReps: targetReps ?? this.targetReps,
       repCount: repCount ?? this.repCount,
+      totalReps: totalReps ?? this.totalReps,
       restSecondsLeft: restSecondsLeft ?? this.restSecondsLeft,
       kneeAngle: kneeAngle ?? this.kneeAngle,
       formResult: formResult ?? this.formResult,
@@ -111,18 +114,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final poses = await _poseService.processFrame(image, camera);
     if (poses == null) return;
 
-    // Compute portrait-corrected size from actual CameraImage (not previewSize)
-    final rot = camera.sensorOrientation;
-    final absSize = (rot == 90 || rot == 270)
-        ? Size(image.height.toDouble(), image.width.toDouble())
-        : Size(image.width.toDouble(), image.height.toDouble());
-
-    final plane = image.planes[0];
-    final actualWidth = plane.bytesPerRow ~/ 4; // BGRA = 4 bytes/pixel
-    final actualHeight = plane.bytes.length ~/ plane.bytesPerRow;
-    debugPrint('[DEBUG] CameraImage: ${image.width}×${image.height} | '
-        'bytesPerRow: ${plane.bytesPerRow} | actualWidth: $actualWidth | '
-        'actualHeight: $actualHeight | sensorOrientation: $rot | absSize: $absSize');
+    final absSize = Size(image.width.toDouble(), image.height.toDouble());
 
     if (poses.isEmpty) {
       state = state.copyWith(
@@ -135,16 +127,6 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     final lms = poses.first.landmarks;
-    final nose = lms[PoseLandmarkType.nose];
-    if (nose != null) {
-      debugPrint('[DEBUG] nose: (${nose.x.toStringAsFixed(1)}, ${nose.y.toStringAsFixed(1)}) '
-          'likelihood: ${nose.likelihood.toStringAsFixed(2)}');
-    }
-    final lShoulder = lms[PoseLandmarkType.leftShoulder];
-    if (lShoulder != null) {
-      debugPrint('[DEBUG] leftShoulder: (${lShoulder.x.toStringAsFixed(1)}, ${lShoulder.y.toStringAsFixed(1)})');
-    }
-
     final hip = lms[PoseLandmarkType.leftHip];
     final knee = lms[PoseLandmarkType.leftKnee];
     final ankle = lms[PoseLandmarkType.leftAnkle];
@@ -218,16 +200,20 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void _onSetComplete() {
     _restTimer?.cancel();
+    final setReps = _repCounter.count;
+    final newTotal = state.totalReps + setReps;
     if (state.currentSet >= state.targetSets) {
       state = state.copyWith(
         status: SessionStatus.finished,
-        repCount: _repCounter.count,
+        repCount: setReps,
+        totalReps: newTotal,
       );
       return;
     }
     state = state.copyWith(
       status: SessionStatus.resting,
-      repCount: _repCounter.count,
+      repCount: setReps,
+      totalReps: newTotal,
       restSecondsLeft: 60,
     );
     _startRestTimer();
