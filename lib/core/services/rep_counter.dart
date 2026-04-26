@@ -1,24 +1,24 @@
 enum _RepPhase { waitingDown, down }
 
 class RepCounter {
-  static const double _downThreshold = 100.0;
-  static const double _upThreshold = 160.0;
+  RepCounter({this.downThreshold = 100.0, this.upThreshold = 160.0});
+
+  final double downThreshold;
+  final double upThreshold;
 
   _RepPhase _phase = _RepPhase.waitingDown;
   int _count = 0;
 
   int get count => _count;
 
-  /// Feed a knee angle per frame. Returns true when a rep is completed.
-  bool update(double kneeAngle) {
+  /// Feed a joint angle per frame. Returns true when a rep is completed.
+  bool update(double angle) {
     switch (_phase) {
       case _RepPhase.waitingDown:
-        if (kneeAngle < _downThreshold) {
-          _phase = _RepPhase.down;
-        }
+        if (angle < downThreshold) _phase = _RepPhase.down;
         return false;
       case _RepPhase.down:
-        if (kneeAngle > _upThreshold) {
+        if (angle > upThreshold) {
           _count++;
           _phase = _RepPhase.waitingDown;
           return true;

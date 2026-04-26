@@ -71,7 +71,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.workoutSession,
-        builder: (context, state) => const WorkoutSessionScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final exerciseId = extra?['exerciseId'] as String? ?? 'squats';
+          return WorkoutSessionScreen(exerciseId: exerciseId);
+        },
       ),
       GoRoute(
         path: RouteNames.workoutSummary,

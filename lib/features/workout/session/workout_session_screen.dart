@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/services/form_analyzer.dart';
+import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import 'widgets/pose_overlay_painter.dart';
@@ -12,7 +12,9 @@ import 'widgets/rest_overlay.dart';
 import 'workout_session_notifier.dart';
 
 class WorkoutSessionScreen extends ConsumerStatefulWidget {
-  const WorkoutSessionScreen({super.key});
+  const WorkoutSessionScreen({super.key, required this.exerciseId});
+
+  final String exerciseId;
 
   @override
   ConsumerState<WorkoutSessionScreen> createState() =>
@@ -36,7 +38,6 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     _cameras = await availableCameras();
     if (_cameras.isEmpty) return;
 
-    // Default to front camera so user can see themselves
     _cameraIndex = _cameras.indexWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
     );
@@ -44,7 +45,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
 
     await _startCamera(_cameraIndex);
 
-    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
+    final notifier =
+        ref.read(workoutSessionNotifierProvider(widget.exerciseId).notifier);
     await notifier.startSession();
     notifier.onCameraReady();
   }
@@ -65,7 +67,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     setState(() => _controller = controller);
 
     controller.startImageStream((image) {
-      ref.read(workoutSessionNotifierProvider.notifier).processFrame(image, camera);
+      ref
+          .read(workoutSessionNotifierProvider(widget.exerciseId).notifier)
+          .processFrame(image, camera);
     });
   }
 
@@ -93,23 +97,29 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(workoutSessionNotifierProvider);
-    final notifier = ref.read(workoutSessionNotifierProvider.notifier);
+    final session =
+        ref.watch(workoutSessionNotifierProvider(widget.exerciseId));
+    final notifier =
+        ref.read(workoutSessionNotifierProvider(widget.exerciseId).notifier);
     final controller = _controller;
 
-    ref.listen<WorkoutSessionState>(workoutSessionNotifierProvider, (prev, next) {
-      if (next.status == SessionStatus.finished &&
-          prev?.status != SessionStatus.finished) {
-        context.go(RouteNames.workoutSummary, extra: {
-          'setsCompleted': next.currentSet,
-          'targetSets': next.targetSets,
-          'totalReps': next.totalReps,
-          'exerciseName': 'Squat',
-        });
-      }
-    });
+    ref.listen<WorkoutSessionState>(
+      workoutSessionNotifierProvider(widget.exerciseId),
+      (prev, next) {
+        if (next.status == SessionStatus.finished &&
+            prev?.status != SessionStatus.finished) {
+          context.go(RouteNames.workoutSummary, extra: {
+            'setsCompleted': next.currentSet,
+            'targetSets': next.targetSets,
+            'totalReps': next.totalReps,
+            'exerciseName': widget.exerciseId,
+          });
+        }
+      },
+    );
 
-    if (controller == null || !controller.value.isInitialized ||
+    if (controller == null ||
+        !controller.value.isInitialized ||
         session.status == SessionStatus.idle ||
         session.status == SessionStatus.initializing) {
       return const Scaffold(
@@ -122,7 +132,6 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
 
     final isFront =
         _cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
-    // Use size from state — computed from actual CameraImage in processFrame
     final absSize = session.absoluteImageSize;
 
     return Scaffold(
@@ -130,10 +139,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Camera feed
           CameraPreview(controller),
 
-          // Skeleton overlay
           if (session.poses.isNotEmpty && absSize != Size.zero)
             CustomPaint(
               painter: PoseOverlayPainter(
@@ -143,7 +150,6 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
               ),
             ),
 
-          // Top bar
           Positioned(
             top: MediaQuery.of(context).padding.top,
             left: 0,
@@ -151,27 +157,25 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
             child: _buildTopBar(context, session, notifier),
           ),
 
-          // Form feedback banner
           if (session.formResult != null &&
               session.formResult!.feedback.isNotEmpty &&
               session.status == SessionStatus.tracking)
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
-              bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
+              bottom:
+                  MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
               child: _buildFormBanner(context, session),
             ),
 
-          // Bottom HUD
           if (session.status != SessionStatus.resting)
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
               bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
-              child: _buildHud(context, session, notifier),
+              child: _buildHud(context, session),
             ),
 
-          // Rest overlay (full screen)
           if (session.status == SessionStatus.resting)
             RestOverlay(
               secondsLeft: session.restSecondsLeft,
@@ -203,13 +207,12 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           ),
           const Spacer(),
           Text(
-            'Squat  •  Set ${session.currentSet}/${session.targetSets}',
+            'Set ${session.currentSet}/${session.targetSets}',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
                 ),
           ),
           const Spacer(),
-          // Pause / Resume
           IconButton(
             icon: const Icon(Icons.flip_camera_ios_rounded,
                 color: AppColors.textPrimary),
@@ -272,13 +275,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     );
   }
 
-  Widget _buildHud(
-    BuildContext context,
-    WorkoutSessionState session,
-    WorkoutSessionNotifier notifier,
-  ) {
-    final angleText = session.kneeAngle != null
-        ? '${session.kneeAngle!.toStringAsFixed(0)}°'
+  Widget _buildHud(BuildContext context, WorkoutSessionState session) {
+    final angleText = session.jointAngle != null
+        ? '${session.jointAngle!.toStringAsFixed(0)}°'
         : '--';
     final bodyFound = session.poses.isNotEmpty;
 
@@ -297,7 +296,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         children: [
           _hudItem(context, 'Reps', '${session.repCount}'),
           Container(width: 1, height: 40, color: AppColors.divider),
-          _hudItem(context, 'เข่า (องศา)', angleText),
+          _hudItem(context, session.angleLabel, angleText),
           Container(width: 1, height: 40, color: AppColors.divider),
           _hudItem(
             context,
