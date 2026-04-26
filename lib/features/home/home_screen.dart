@@ -255,7 +255,8 @@ class _ExerciseCard extends StatelessWidget {
 
     return AppCard(
       onTap: _isActive
-          ? () => context.push(RouteNames.workoutSession)
+          ? () => context.push(RouteNames.workoutSession,
+                extra: {'exerciseId': workout.id})
           : null,
       backgroundColor:
           _isActive ? null : AppColors.surface.withValues(alpha: 0.6),

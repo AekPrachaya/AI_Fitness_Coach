@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import '../../../core/services/form_analyzer.dart';
+import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
@@ -31,7 +31,8 @@ class WorkoutSessionState {
     this.repCount = 0,
     this.totalReps = 0,
     this.restSecondsLeft = 60,
-    this.kneeAngle,
+    this.jointAngle,
+    this.angleLabel = 'องศา',
     this.formResult,
     this.errorMessage,
     this.poses = const [],
@@ -45,13 +46,11 @@ class WorkoutSessionState {
   final int repCount;
   final int totalReps;
   final int restSecondsLeft;
-  final double? kneeAngle;
+  final double? jointAngle;
+  final String angleLabel;
   final FormResult? formResult;
   final String? errorMessage;
   final List<Pose> poses;
-
-  /// Size of the image in its upright (portrait) orientation,
-  /// derived from the actual CameraImage passed to ML Kit.
   final Size absoluteImageSize;
 
   WorkoutSessionState copyWith({
@@ -62,7 +61,8 @@ class WorkoutSessionState {
     int? repCount,
     int? totalReps,
     int? restSecondsLeft,
-    double? kneeAngle,
+    double? jointAngle,
+    String? angleLabel,
     FormResult? formResult,
     String? errorMessage,
     List<Pose>? poses,
@@ -76,7 +76,8 @@ class WorkoutSessionState {
       repCount: repCount ?? this.repCount,
       totalReps: totalReps ?? this.totalReps,
       restSecondsLeft: restSecondsLeft ?? this.restSecondsLeft,
-      kneeAngle: kneeAngle ?? this.kneeAngle,
+      jointAngle: jointAngle ?? this.jointAngle,
+      angleLabel: angleLabel ?? this.angleLabel,
       formResult: formResult ?? this.formResult,
       errorMessage: errorMessage,
       poses: poses ?? this.poses,
@@ -88,11 +89,20 @@ class WorkoutSessionState {
 // ── Notifier ───────────────────────────────────────────────────────────────
 
 class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
-  WorkoutSessionNotifier() : super(const WorkoutSessionState());
+  WorkoutSessionNotifier(String exerciseId)
+      : _analyzer = ExerciseAnalyzer.forId(exerciseId),
+        super(const WorkoutSessionState()) {
+    final analyzer = ExerciseAnalyzer.forId(exerciseId);
+    _repCounter = RepCounter(
+      downThreshold: analyzer.downThreshold,
+      upThreshold: analyzer.upThreshold,
+    );
+    state = state.copyWith(angleLabel: analyzer.angleLabel);
+  }
 
+  final ExerciseAnalyzer _analyzer;
   final _poseService = PoseDetectionService();
-  final _repCounter = RepCounter();
-  final _formAnalyzer = FormAnalyzer();
+  late final RepCounter _repCounter;
   Timer? _restTimer;
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -119,7 +129,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     if (poses.isEmpty) {
       state = state.copyWith(
         poses: [],
-        kneeAngle: null,
+        jointAngle: null,
         formResult: null,
         absoluteImageSize: absSize,
       );
@@ -127,17 +137,16 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     final lms = poses.first.landmarks;
-    final hip = lms[PoseLandmarkType.leftHip];
-    final knee = lms[PoseLandmarkType.leftKnee];
-    final ankle = lms[PoseLandmarkType.leftAnkle];
+    final a = ExerciseAnalyzer.best(lms, _analyzer.primaryA, _analyzer.altA);
+    final b = ExerciseAnalyzer.best(lms, _analyzer.primaryB, _analyzer.altB);
+    final c = ExerciseAnalyzer.best(lms, _analyzer.primaryC, _analyzer.altC);
 
     double? angle;
     FormResult? form;
 
-    if (hip != null && knee != null && ankle != null &&
-        hip.likelihood > 0.5 && knee.likelihood > 0.5 && ankle.likelihood > 0.5) {
-      angle = calculateAngle(hip, knee, ankle);
-      form = _formAnalyzer.analyze(poses.first, angle);
+    if (a != null && b != null && c != null) {
+      angle = calculateAngle(a, b, c);
+      form = _analyzer.analyze(poses.first, angle);
 
       final repDone = _repCounter.update(angle);
       if (repDone) {
@@ -150,22 +159,19 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
           repCount: newCount,
           status: SessionStatus.repComplete,
           poses: poses,
-          kneeAngle: angle,
+          jointAngle: angle,
           formResult: form,
           absoluteImageSize: absSize,
         );
-        // Brief repComplete flash, then back to tracking
         await Future.delayed(const Duration(milliseconds: 600));
-        if (mounted) {
-          state = state.copyWith(status: SessionStatus.tracking);
-        }
+        if (mounted) state = state.copyWith(status: SessionStatus.tracking);
         return;
       }
     }
 
     state = state.copyWith(
       poses: poses,
-      kneeAngle: angle,
+      jointAngle: angle,
       formResult: form,
       repCount: _repCounter.count,
       absoluteImageSize: absSize,
@@ -251,7 +257,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
-final workoutSessionNotifierProvider =
-    StateNotifierProvider.autoDispose<WorkoutSessionNotifier, WorkoutSessionState>(
-  (ref) => WorkoutSessionNotifier(),
+final workoutSessionNotifierProvider = StateNotifierProvider.autoDispose
+    .family<WorkoutSessionNotifier, WorkoutSessionState, String>(
+  (ref, exerciseId) => WorkoutSessionNotifier(exerciseId),
 );
