@@ -243,10 +243,6 @@ class _ExerciseCard extends StatelessWidget {
 
   final Workout workout;
 
-  static const _activeId = 'squats';
-
-  bool get _isActive => workout.id == _activeId;
-
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -254,12 +250,8 @@ class _ExerciseCard extends StatelessWidget {
     final diffLabel = _diffLabel(workout.difficulty);
 
     return AppCard(
-      onTap: _isActive
-          ? () => context.push(RouteNames.workoutSession,
-                extra: {'exerciseId': workout.id})
-          : null,
-      backgroundColor:
-          _isActive ? null : AppColors.surface.withValues(alpha: 0.6),
+      onTap: () => context.push(RouteNames.workoutSession,
+          extra: {'exerciseId': workout.id}),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -268,13 +260,12 @@ class _ExerciseCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: (_isActive ? AppColors.accent : AppColors.textSecondary)
-                  .withValues(alpha: 0.12),
+              color: AppColors.accent.withValues(alpha: 0.12),
               borderRadius: AppRadius.smAll,
             ),
             child: Icon(
               _iconFor(workout.id),
-              color: _isActive ? AppColors.accent : AppColors.textSecondary,
+              color: AppColors.accent,
               size: 24,
             ),
           ),
@@ -290,11 +281,7 @@ class _ExerciseCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         workout.name,
-                        style: tt.titleSmall?.copyWith(
-                          color: _isActive
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
-                        ),
+                        style: tt.titleSmall,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -320,27 +307,11 @@ class _ExerciseCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
 
           // Action
-          if (_isActive)
-            const Icon(
-              Icons.play_circle_filled_rounded,
-              color: AppColors.accent,
-              size: 32,
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.smAll,
-                border: Border.all(color: AppColors.borderSubtle),
-              ),
-              child: Text(
-                'เร็วๆ นี้',
-                style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
-              ),
-            ),
+          const Icon(
+            Icons.play_circle_filled_rounded,
+            color: AppColors.accent,
+            size: 32,
+          ),
         ],
       ),
     );
