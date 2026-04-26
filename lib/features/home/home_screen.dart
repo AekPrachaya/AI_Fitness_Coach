@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import 'widgets/home_header.dart';
+import 'widgets/today_plan_card.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tt = Theme.of(context).textTheme;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -21,33 +20,9 @@ class HomeScreen extends ConsumerWidget {
               child: HomeHeader(),
             ),
 
-            // ── Section 2: Today's Plan Card (Task 3.3) ──────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                child: Container(
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.lgAll,
-                    border: Border.all(
-                      color: AppColors.borderSubtle,
-                      width: 1,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      "Today's Plan Card — Task 3.3",
-                      style: tt.labelMedium?.copyWith(
-                        color: AppColors.textDisabled,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            // ── Section 2: Today's Plan Card ──────────────────
+            const SliverToBoxAdapter(
+              child: TodayPlanCard(),
             ),
 
             // ── Sections 3–6: Placeholders ───────────────────
