@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../data/workout_repository.dart';
 
-class WorkoutSummaryScreen extends StatelessWidget {
+class WorkoutSummaryScreen extends ConsumerStatefulWidget {
   const WorkoutSummaryScreen({
     super.key,
     required this.setsCompleted,
@@ -18,6 +20,47 @@ class WorkoutSummaryScreen extends StatelessWidget {
   final int targetSets;
   final int totalReps;
   final String exerciseName;
+
+  @override
+  ConsumerState<WorkoutSummaryScreen> createState() =>
+      _WorkoutSummaryScreenState();
+}
+
+class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _persistSession();
+  }
+
+  void _persistSession() {
+    final repo = ref.read(workoutRepositoryProvider);
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final exerciseId =
+        widget.exerciseName.toLowerCase().replaceAll(' ', '_');
+    repo.saveSession({
+      'id': id,
+      'workout_id': exerciseId,
+      'workout_name': widget.exerciseName,
+      'completed_at': DateTime.now().toIso8601String(),
+      'duration_seconds': 0,
+      'total_reps': widget.totalReps,
+      'avg_form_score': 0.0,
+      'estimated_calories': 0,
+      'most_common_error': '',
+      'ai_tip': '',
+      'exercises': [
+        {
+          'exercise_id': exerciseId,
+          'exercise_name': widget.exerciseName,
+          'sets_completed': widget.setsCompleted,
+          'total_reps': widget.totalReps,
+          'avg_form_score': 0.0,
+          'most_common_error': '',
+        }
+      ],
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +103,7 @@ class WorkoutSummaryScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                exerciseName,
+                widget.exerciseName,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: AppColors.accent,
                     ),
@@ -79,9 +122,17 @@ class WorkoutSummaryScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _statItem(context, 'Set สำเร็จ', '$setsCompleted/$targetSets'),
+                    _statItem(
+                      context,
+                      'Set สำเร็จ',
+                      '${widget.setsCompleted}/${widget.targetSets}',
+                    ),
                     Container(width: 1, height: 52, color: AppColors.divider),
-                    _statItem(context, 'Rep ทั้งหมด', '$totalReps'),
+                    _statItem(
+                      context,
+                      'Rep ทั้งหมด',
+                      '${widget.totalReps}',
+                    ),
                   ],
                 ),
               ),
