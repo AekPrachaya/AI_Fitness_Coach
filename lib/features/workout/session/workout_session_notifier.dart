@@ -117,8 +117,12 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         ? Size(image.height.toDouble(), image.width.toDouble())
         : Size(image.width.toDouble(), image.height.toDouble());
 
+    final plane = image.planes[0];
+    final actualWidth = plane.bytesPerRow ~/ 4; // BGRA = 4 bytes/pixel
+    final actualHeight = plane.bytes.length ~/ plane.bytesPerRow;
     debugPrint('[DEBUG] CameraImage: ${image.width}×${image.height} | '
-        'sensorOrientation: $rot | absSize: $absSize');
+        'bytesPerRow: ${plane.bytesPerRow} | actualWidth: $actualWidth | '
+        'actualHeight: $actualHeight | sensorOrientation: $rot | absSize: $absSize');
 
     if (poses.isEmpty) {
       state = state.copyWith(
