@@ -16,7 +16,48 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
+import '../../features/home/home_screen.dart';
+import '../../features/workout/browse/workout_browse_screen.dart';
+import '../../features/workout/detail/workout_detail_screen.dart';
+import '../../features/workout/session/pre_workout_screen.dart';
+import '../../features/workout/session/session_screen.dart';
+import '../../features/workout/summary/workout_summary_screen.dart';
+import '../../features/progress/progress_screen.dart';
+import '../../features/profile/profile_screen.dart';
+import '../../shared/widgets/app_shell.dart';
 import 'route_names.dart';
+
+// ── Page transition helper ───────────────────────────────────────────────────
+// SPEC: "Default: Fade + slight vertical slide (200ms)"
+
+CustomTransitionPage<void> _fadePage({
+  required LocalKey key,
+  required Widget child,
+}) =>
+    CustomTransitionPage<void>(
+      key: key,
+      child: child,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeIn,
+        ),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          )),
+          child: child,
+        ),
+      ),
+      transitionDuration: const Duration(milliseconds: 200),
+    );
+
+// ── Router ───────────────────────────────────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -63,11 +104,87 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.login,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: RouteNames.home,
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Home — TODO')),
-        ),
+
+      // ── Main App Shell (4-tab navigation) ──────────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => AppShell(child: child),
+        routes: [
+          // Tab 1: Home
+          GoRoute(
+            path: RouteNames.home,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const HomeScreen(),
+            ),
+          ),
+
+          // Tab 2: Workout + nested sub-routes
+          GoRoute(
+            path: RouteNames.workout,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const WorkoutBrowseScreen(),
+            ),
+            routes: [
+              GoRoute(
+                path: ':id',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: WorkoutDetailScreen(
+                    workoutId: state.pathParameters['id']!,
+                  ),
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'pre',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: PreWorkoutScreen(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'session',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: SessionScreen(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'summary',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: WorkoutSummaryScreen(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Tab 3: Progress
+          GoRoute(
+            path: RouteNames.progress,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const ProgressScreen(),
+            ),
+          ),
+
+          // Tab 4: Profile
+          GoRoute(
+            path: RouteNames.profile,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const ProfileScreen(),
+            ),
+          ),
+        ],
       ),
 
       // ── Development / debug routes ──────────────────────────────────────

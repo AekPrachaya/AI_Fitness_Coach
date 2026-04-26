@@ -3,8 +3,9 @@
 .agents/
 skills-lock.json
 
-# Project spec (local reference only)
+# Project spec & roadmap (local reference only)
 SPEC.md
+ai-fitness-coach-dev-roadmap.html
 
 # Miscellaneous
 *.class
