@@ -41,7 +41,7 @@ abstract class ExerciseAnalyzer {
   // ── Helper ────────────────────────────────────────────────────────────────
 
   /// Returns the landmark with higher confidence between [primary] and [alt].
-  /// Returns null if neither exceeds the 0.5 likelihood threshold.
+  /// Returns null if neither exceeds the 0.65 likelihood threshold.
   static PoseLandmark? best(
     Map<PoseLandmarkType, PoseLandmark> lms,
     PoseLandmarkType primary,
@@ -50,9 +50,9 @@ abstract class ExerciseAnalyzer {
     final p = lms[primary];
     final a = lms[alt];
     if (p == null && a == null) return null;
-    if (p == null) return a!.likelihood > 0.5 ? a : null;
-    if (a == null) return p.likelihood > 0.5 ? p : null;
+    if (p == null) return a!.likelihood > 0.65 ? a : null;
+    if (a == null) return p.likelihood > 0.65 ? p : null;
     final winner = p.likelihood >= a.likelihood ? p : a;
-    return winner.likelihood > 0.5 ? winner : null;
+    return winner.likelihood > 0.65 ? winner : null;
   }
 }
