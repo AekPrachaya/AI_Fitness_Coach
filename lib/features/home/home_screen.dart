@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import 'widgets/home_header.dart';
 import 'widgets/today_plan_card.dart';
+import 'widgets/weekly_activity_chart.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -31,7 +32,7 @@ class HomeScreen extends ConsumerWidget {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const SizedBox(height: AppSpacing.lg),
-                  _PlaceholderSection('Weekly Activity Chart — Task 3.4'),
+                  const WeeklyActivityChart(),
                   const SizedBox(height: AppSpacing.lg),
                   _PlaceholderSection('Quick Stats — Task 3.5'),
                   const SizedBox(height: AppSpacing.lg),
