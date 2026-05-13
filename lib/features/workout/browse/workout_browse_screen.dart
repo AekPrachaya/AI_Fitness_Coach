@@ -460,9 +460,9 @@ class _BrowseResults extends ConsumerWidget {
             AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xxl),
         sliver: SliverList(
           delegate: SliverChildBuilderDelegate(
-            (context2, i) => const Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.md),
-              child: AppCard.skeleton(height: 220),
+            (context2, i) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: WorkoutCard.skeleton(),
             ),
             childCount: 4,
           ),
@@ -527,9 +527,8 @@ class _ListResults extends ConsumerWidget {
                   final workout = workouts[index];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: ExerciseCard(
+                    child: WorkoutCard(
                       workout: workout,
-                      compact: false,
                       onTap: () => context
                           .go(RouteNames.workoutDetailPath(workout.id)),
                     )
