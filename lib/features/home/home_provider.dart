@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../core/providers/user_profile_provider.dart';
 import '../../core/utils/mock_data.dart';
 import '../../shared/models/models.dart';
 
@@ -108,6 +109,59 @@ class DayActivity {
     return labels[date.weekday - 1];
   }
 }
+
+// ── weeklyActivityProvider ────────────────────────────────────────────────────
+
+// ── WeekStats data class ──────────────────────────────────────────────────────
+
+class WeekStats {
+  final int totalWorkouts;
+  final int totalMinutes;
+  final int estimatedCalories;
+
+  const WeekStats({
+    required this.totalWorkouts,
+    required this.totalMinutes,
+    required this.estimatedCalories,
+  });
+
+  String get minutesDisplay {
+    if (totalMinutes >= 60) {
+      final h = totalMinutes ~/ 60;
+      final m = totalMinutes % 60;
+      return m > 0 ? '${h}h ${m}m' : '${h}h';
+    }
+    return '${totalMinutes}m';
+  }
+}
+
+// ── weekStatsProvider ─────────────────────────────────────────────────────────
+
+/// Derives this week's summary from [weeklyActivityProvider] — no extra Hive read.
+final weekStatsProvider = Provider<WeekStats>((ref) {
+  final days = ref.watch(weeklyActivityProvider);
+  return WeekStats(
+    totalWorkouts:     days.where((d) => !d.isRestDay).length,
+    totalMinutes:      days.fold(0, (s, d) => s + d.totalMinutes),
+    estimatedCalories: days.fold(0, (s, d) => s + d.totalMinutes * 4),
+  );
+});
+
+// ── recommendedWorkoutsProvider ───────────────────────────────────────────────
+
+/// Returns all workouts sorted by relevance to the user's fitness level.
+final recommendedWorkoutsProvider = FutureProvider<List<Workout>>((ref) async {
+  final allWorkouts = await MockData.loadWorkouts();
+  final profile = ref.watch(userProfileProvider);
+
+  final sorted = [...allWorkouts]..sort((a, b) {
+      final aMatch = a.difficulty == profile.fitnessLevel ? 0 : 1;
+      final bMatch = b.difficulty == profile.fitnessLevel ? 0 : 1;
+      return aMatch.compareTo(bMatch);
+    });
+
+  return sorted;
+});
 
 // ── weeklyActivityProvider ────────────────────────────────────────────────────
 
