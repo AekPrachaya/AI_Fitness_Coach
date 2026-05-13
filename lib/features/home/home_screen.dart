@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import 'widgets/achievements_section.dart';
 import 'widgets/home_header.dart';
+import 'widgets/quick_stats_row.dart';
+import 'widgets/recommended_section.dart';
 import 'widgets/today_plan_card.dart';
 import 'widgets/weekly_activity_chart.dart';
 
@@ -26,53 +29,41 @@ class HomeScreen extends ConsumerWidget {
               child: TodayPlanCard(),
             ),
 
-            // ── Sections 3–6: Placeholders ───────────────────
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  const SizedBox(height: AppSpacing.lg),
-                  const WeeklyActivityChart(),
-                  const SizedBox(height: AppSpacing.lg),
-                  _PlaceholderSection('Quick Stats — Task 3.5'),
-                  const SizedBox(height: AppSpacing.lg),
-                  _PlaceholderSection('Recommended — Task 3.5'),
-                  const SizedBox(height: AppSpacing.xxxl),
-                ]),
+            // ── Section 3: Weekly Activity Chart ─────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: WeeklyActivityChart(),
+              ),
+            ),
+
+            // ── Section 4: Quick Stats Row ────────────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: QuickStatsRow(),
+              ),
+            ),
+
+            // ── Section 5: Recommended for You ───────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(top: AppSpacing.lg),
+                child: RecommendedSection(),
+              ),
+            ),
+
+            // ── Section 6: Achievements ───────────────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(
+                    top: AppSpacing.lg, bottom: AppSpacing.xxl),
+                child: AchievementsSection(),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── _PlaceholderSection ───────────────────────────────────────────────────────
-
-class _PlaceholderSection extends StatelessWidget {
-  final String label;
-
-  const _PlaceholderSection(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.5),
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(
-          color: AppColors.borderSubtle,
-          width: 0.5,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: AppColors.textDisabled,
-              ),
         ),
       ),
     );
