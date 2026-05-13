@@ -270,6 +270,7 @@ class _SearchBar extends ConsumerWidget {
           controller: controller,
           focusNode: focusNode,
           style: tt.bodyMedium,
+          textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
             hintText: 'Search exercises...',
             hintStyle:
