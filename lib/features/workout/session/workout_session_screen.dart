@@ -282,7 +282,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          CameraPreview(controller),
+          _buildPreview(controller),
 
           if (session.poses.isNotEmpty && absSize != Size.zero)
             CustomPaint(
@@ -338,6 +338,32 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
               onSkip: notifier.skipRest,
             ),
         ],
+      ),
+    );
+  }
+
+  /// Fills the screen without distorting the image.
+  ///
+  /// Under `StackFit.expand` a bare CameraPreview is handed a tight constraint,
+  /// so its own AspectRatio is overridden and the frame is squeezed to whatever
+  /// shape the phone happens to be. Sizing it to the sensor's own ratio first
+  /// and then cover-fitting keeps the picture true and crops the overflow —
+  /// the same transform PoseOverlayPainter maps the skeleton with.
+  Widget _buildPreview(CameraController controller) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return CameraPreview(controller);
+
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        child: SizedBox(
+          // previewSize is reported in sensor orientation, which is landscape
+          // on essentially every phone; the session is locked to portrait.
+          width: previewSize.height,
+          height: previewSize.width,
+          child: CameraPreview(controller),
+        ),
       ),
     );
   }
