@@ -14,9 +14,17 @@ import 'widgets/rest_overlay.dart';
 import 'workout_session_notifier.dart';
 
 class WorkoutSessionScreen extends ConsumerStatefulWidget {
-  const WorkoutSessionScreen({super.key, required this.exerciseId});
+  const WorkoutSessionScreen({
+    super.key,
+    required this.exerciseId,
+    required this.exerciseName,
+  });
 
   final String exerciseId;
+
+  /// Display name, e.g. 'Bicep Curls' — carried through so the summary and the
+  /// stored history never show the raw id.
+  final String exerciseName;
 
   @override
   ConsumerState<WorkoutSessionScreen> createState() =>
@@ -114,10 +122,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         if (next.status == SessionStatus.finished &&
             prev?.status != SessionStatus.finished) {
           context.go(RouteNames.workoutSummary, extra: {
+            'exerciseId': widget.exerciseId,
+            'exerciseName': widget.exerciseName,
             'setsCompleted': next.currentSet,
             'targetSets': next.targetSets,
             'totalReps': next.totalReps,
-            'exerciseName': widget.exerciseId,
+            'durationSeconds': next.elapsedSeconds,
+            'avgFormScore': next.avgFormScore,
+            'mostCommonError': next.mostCommonError,
           });
         }
       },

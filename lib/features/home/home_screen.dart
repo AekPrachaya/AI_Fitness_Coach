@@ -159,6 +159,7 @@ class _RecentSessionCard extends StatelessWidget {
     final reps = session['total_reps'] as int? ?? 0;
     final raw = session['completed_at'] as String? ?? '';
     final when = raw.isNotEmpty ? _formatDate(raw) : '';
+    final score = (session['avg_form_score'] as num?)?.toDouble() ?? 0;
 
     final exercises = session['exercises'] as List<dynamic>? ?? [];
     final sets = exercises.isNotEmpty
@@ -199,7 +200,15 @@ class _RecentSessionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(name, style: tt.titleSmall),
+                Row(
+                  children: [
+                    Flexible(child: Text(name, style: tt.titleSmall)),
+                    if (score > 0) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      _scoreChip(context, score),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -218,6 +227,27 @@ class _RecentSessionCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _scoreChip(BuildContext context, double score) {
+    final color = AppColors.formScoreColor(score);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: AppRadius.smAll,
+      ),
+      child: Text(
+        'ฟอร์ม ${score.toStringAsFixed(0)}%',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }
@@ -250,8 +280,10 @@ class _ExerciseCard extends StatelessWidget {
     final diffLabel = _diffLabel(workout.difficulty);
 
     return AppCard(
-      onTap: () => context.push(RouteNames.workoutSession,
-          extra: {'exerciseId': workout.id}),
+      onTap: () => context.push(
+        RouteNames.workoutSession,
+        extra: {'exerciseId': workout.id, 'exerciseName': workout.name},
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

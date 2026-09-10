@@ -13,6 +13,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 100.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'เข่า (องศา)';
+  @override double get met         => 5.0; // bodyweight squats, vigorous effort
 
   static const _analyzeThreshold = 130.0;
   static const _depthThreshold   = 90.0;
@@ -22,7 +23,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
@@ -59,8 +60,6 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 }

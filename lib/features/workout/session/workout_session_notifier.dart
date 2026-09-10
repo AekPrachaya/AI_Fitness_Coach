@@ -7,6 +7,7 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
+import 'session_stats.dart';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,9 @@ class WorkoutSessionState {
     this.errorMessage,
     this.poses = const [],
     this.absoluteImageSize = Size.zero,
+    this.elapsedSeconds = 0,
+    this.avgFormScore = 0,
+    this.mostCommonError = '',
   });
 
   final SessionStatus status;
@@ -53,6 +57,16 @@ class WorkoutSessionState {
   final List<Pose> poses;
   final Size absoluteImageSize;
 
+  /// Wall-clock length of the session, rest included. Settled when the session
+  /// finishes.
+  final int elapsedSeconds;
+
+  /// Mean form grade over the graded reps, 0–100.
+  final double avgFormScore;
+
+  /// The fault seen in the most reps; empty when the workout was clean.
+  final String mostCommonError;
+
   WorkoutSessionState copyWith({
     SessionStatus? status,
     int? currentSet,
@@ -67,6 +81,9 @@ class WorkoutSessionState {
     String? errorMessage,
     List<Pose>? poses,
     Size? absoluteImageSize,
+    int? elapsedSeconds,
+    double? avgFormScore,
+    String? mostCommonError,
     // `x ?? this.x` cannot express "set back to null", so clearing the
     // frame-scoped fields (body left the frame) needs explicit flags.
     bool clearJointAngle = false,
@@ -86,6 +103,9 @@ class WorkoutSessionState {
       errorMessage: errorMessage,
       poses: poses ?? this.poses,
       absoluteImageSize: absoluteImageSize ?? this.absoluteImageSize,
+      elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+      avgFormScore: avgFormScore ?? this.avgFormScore,
+      mostCommonError: mostCommonError ?? this.mostCommonError,
     );
   }
 }
@@ -106,8 +126,16 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   final ExerciseAnalyzer _analyzer;
   final _poseService = PoseDetectionService();
+  final _stats = SessionStats();
   late final RepCounter _repCounter;
   Timer? _restTimer;
+  DateTime? _startedAt;
+
+  /// Read by the summary screen to estimate calories burned.
+  double get met => _analyzer.met;
+
+  /// Every fault seen this session, most frequent first.
+  Map<String, int> get errorCounts => _stats.errorCounts;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -118,6 +146,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void onCameraReady() {
     if (state.status == SessionStatus.initializing) {
+      _startedAt ??= DateTime.now();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -153,9 +182,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     if (joints case [final a, final b, final c]) {
       angle = calculateAngle(a, b, c);
       form = _analyzer.analyze(poses.first, angle);
+      _stats.observe(form);
 
       final repDone = _repCounter.update(angle);
       if (repDone) {
+        _stats.commitRep();
         final newCount = _repCounter.count;
         if (newCount >= state.targetReps) {
           _onSetComplete();
@@ -207,7 +238,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void endSession() {
     _restTimer?.cancel();
-    state = state.copyWith(status: SessionStatus.finished);
+    state = _settled(state.copyWith(status: SessionStatus.finished));
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
@@ -217,11 +248,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final setReps = _repCounter.count;
     final newTotal = state.totalReps + setReps;
     if (state.currentSet >= state.targetSets) {
-      state = state.copyWith(
+      state = _settled(state.copyWith(
         status: SessionStatus.finished,
         repCount: setReps,
         totalReps: newTotal,
-      );
+      ));
       return;
     }
     state = state.copyWith(
@@ -231,6 +262,17 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       restSecondsLeft: 60,
     );
     _startRestTimer();
+  }
+
+  /// Stamps the totals that only make sense once the session is over.
+  WorkoutSessionState _settled(WorkoutSessionState finished) {
+    final started = _startedAt;
+    return finished.copyWith(
+      elapsedSeconds:
+          started == null ? 0 : DateTime.now().difference(started).inSeconds,
+      avgFormScore: _stats.avgFormScore,
+      mostCommonError: _stats.mostCommonError,
+    );
   }
 
   void _startRestTimer() {

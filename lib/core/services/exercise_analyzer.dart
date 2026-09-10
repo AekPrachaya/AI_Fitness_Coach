@@ -7,9 +7,27 @@ import 'analyzers/bicep_curl_analyzer.dart';
 enum FormScore { good, fair, poor }
 
 class FormResult {
-  const FormResult({required this.score, required this.feedback});
+  const FormResult({
+    required this.score,
+    required this.feedback,
+    this.issues = const [],
+  });
+
   final FormScore score;
+
+  /// The line shown in the session HUD.
   final String feedback;
+
+  /// The individual faults behind [feedback], kept apart so a finished session
+  /// can tally them without re-splitting the display string. Empty for a clean
+  /// rep and for [notEvaluated].
+  final List<String> issues;
+
+  /// Returned for a joint angle outside the range worth grading — standing
+  /// between reps, say. Distinct from a graded-clean rep, which carries
+  /// feedback, so session stats can ignore it.
+  static const FormResult notEvaluated =
+      FormResult(score: FormScore.good, feedback: '');
 }
 
 abstract class ExerciseAnalyzer {
@@ -26,6 +44,10 @@ abstract class ExerciseAnalyzer {
 
   String get angleLabel;    // label shown in the session HUD
 
+  /// Metabolic equivalent of task — kcal/kg/hour — used to estimate the
+  /// energy a finished session burned.
+  double get met;
+
   FormResult analyze(Pose pose, double angle);
 
   // ── Factory ───────────────────────────────────────────────────────────────
@@ -38,7 +60,20 @@ abstract class ExerciseAnalyzer {
         _             => SquatAnalyzer(),
       };
 
-  // ── Helper ────────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Grades a rep from the faults found in it: none is good, one is fair,
+  /// more than one is poor.
+  static FormResult verdict(List<String> issues) {
+    if (issues.isEmpty) {
+      return const FormResult(score: FormScore.good, feedback: 'ท่าดีมาก!');
+    }
+    return FormResult(
+      score: issues.length == 1 ? FormScore.fair : FormScore.poor,
+      feedback: issues.join(' · '),
+      issues: List.unmodifiable(issues),
+    );
+  }
 
   /// Minimum ML Kit likelihood for a landmark to be trusted.
   static const double minLikelihood = 0.65;

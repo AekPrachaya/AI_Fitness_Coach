@@ -36,6 +36,39 @@ void main() {
     });
   });
 
+  group('verdict', () {
+    test('a clean rep is good and carries no issues', () {
+      final result = ExerciseAnalyzer.verdict(const []);
+      expect(result.score, FormScore.good);
+      expect(result.feedback, 'ท่าดีมาก!');
+      expect(result.issues, isEmpty);
+    });
+
+    test('one fault is fair and keeps the fault for tallying', () {
+      final result = ExerciseAnalyzer.verdict(['เข่าเกินนิ้วเท้า']);
+      expect(result.score, FormScore.fair);
+      expect(result.feedback, 'เข่าเกินนิ้วเท้า');
+      expect(result.issues, ['เข่าเกินนิ้วเท้า']);
+    });
+
+    test('several faults are poor and stay separable', () {
+      final result = ExerciseAnalyzer.verdict(['หลังค่อม', 'ลงไม่ลึก']);
+      expect(result.score, FormScore.poor);
+      expect(result.feedback, 'หลังค่อม · ลงไม่ลึก');
+      expect(result.issues, ['หลังค่อม', 'ลงไม่ลึก']);
+    });
+
+    test('the returned issue list cannot be mutated by a caller', () {
+      final result = ExerciseAnalyzer.verdict(['a', 'b']);
+      expect(() => result.issues.add('c'), throwsUnsupportedError);
+    });
+
+    test('notEvaluated is distinguishable from a graded-clean rep', () {
+      expect(FormResult.notEvaluated.feedback, isEmpty);
+      expect(ExerciseAnalyzer.verdict(const []).feedback, isNotEmpty);
+    });
+  });
+
   group('bestSide', () {
     test('picks the side whose weakest joint is strongest', () {
       final lms = lmsOf([

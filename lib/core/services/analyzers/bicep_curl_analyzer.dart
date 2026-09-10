@@ -13,6 +13,7 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 50.0;
   @override double get upThreshold   => 150.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
+  @override double get met         => 3.5; // isolated arm work, light effort
 
   static const _analyzeThreshold = 120.0;
   // Ratios relative to upper-arm length (shoulder→elbow), so checks scale
@@ -26,7 +27,7 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
       _shoulderXAtCurlStart = null;
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
@@ -55,8 +56,6 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 }

@@ -13,6 +13,7 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 90.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
+  @override double get met         => 3.8; // calisthenics, moderate effort
 
   static const _analyzeThreshold = 110.0;
   static const _depthThreshold   = 90.0;
@@ -21,7 +22,7 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
@@ -49,9 +50,7 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
     // 2. Depth — elbow must reach below 90°
     if (angle > _depthThreshold) issues.add('ลงให้ถึงกว่านี้');
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 
   // Angle at vertex [b] formed by points a-b-c, in degrees.
