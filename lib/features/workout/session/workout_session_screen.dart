@@ -31,22 +31,47 @@ class WorkoutSessionScreen extends ConsumerStatefulWidget {
       _WorkoutSessionScreenState();
 }
 
-class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
+class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   int _cameraIndex = 0;
   bool _isSwitching = false;
+  bool _isStreaming = false;
+
+  /// Camera work is serialised through this chain: start, stop, switch and the
+  /// lifecycle teardown all throw if they interleave on the same controller.
+  Future<void> _cameraQueue = Future.value();
+
+  WorkoutSessionNotifier get _notifier =>
+      ref.read(workoutSessionNotifierProvider(widget.exerciseId).notifier);
+
+  /// Pose detection only earns its battery cost while a set is running. Rests
+  /// and pauses stop the stream; the brief repComplete flash does not, since
+  /// restarting the stream every rep would be far more expensive.
+  static bool _wantsFrames(SessionStatus status) =>
+      status != SessionStatus.paused &&
+      status != SessionStatus.resting &&
+      status != SessionStatus.finished;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    _initCamera();
+    _enqueue(_initCamera);
+  }
+
+  /// Runs [action] once any camera work already in flight has settled.
+  void _enqueue(Future<void> Function() action) {
+    _cameraQueue = _cameraQueue.then((_) => action()).catchError((Object e) {
+      debugPrint('WorkoutSessionScreen camera error: $e');
+    });
   }
 
   Future<void> _initCamera() async {
     _cameras = await availableCameras();
-    if (_cameras.isEmpty) return;
+    if (_cameras.isEmpty || !mounted) return;
 
     _cameraIndex = _cameras.indexWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
@@ -54,17 +79,16 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     if (_cameraIndex < 0) _cameraIndex = 0;
 
     await _startCamera(_cameraIndex);
+    if (!mounted) return;
 
-    final notifier =
-        ref.read(workoutSessionNotifierProvider(widget.exerciseId).notifier);
+    final notifier = _notifier;
     await notifier.startSession();
     notifier.onCameraReady();
   }
 
   Future<void> _startCamera(int index) async {
-    final camera = _cameras[index];
     final controller = CameraController(
-      camera,
+      _cameras[index],
       ResolutionPreset.medium,
       // Must match what PoseDetectionService decodes: BGRA on iOS,
       // YUV 420 on Android. bgra8888 is not supported by the Android camera.
@@ -74,36 +98,120 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     );
     await controller.initialize();
     if (!mounted) {
-      controller.dispose();
+      await controller.dispose();
       return;
     }
+    _isStreaming = false;
     setState(() => _controller = controller);
 
-    controller.startImageStream((image) {
-      ref
-          .read(workoutSessionNotifierProvider(widget.exerciseId).notifier)
-          .processFrame(image, camera);
-    });
+    await _applyStreaming(_wantsFrames(
+      ref.read(workoutSessionNotifierProvider(widget.exerciseId)).status,
+    ));
+  }
+
+  /// Brings the image stream in line with [wanted]. Safe to call repeatedly.
+  Future<void> _applyStreaming(bool wanted) async {
+    final controller = _controller;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        wanted == _isStreaming) {
+      return;
+    }
+    if (wanted) {
+      await controller.startImageStream(_onFrame);
+      _isStreaming = true;
+    } else {
+      await controller.stopImageStream();
+      _isStreaming = false;
+    }
+  }
+
+  void _onFrame(CameraImage image) {
+    // A frame can still land after dispose: stopping the stream is async, and
+    // reading a provider off a disposed State throws.
+    if (!mounted) return;
+    _notifier.processFrame(image, _cameras[_cameraIndex]);
+  }
+
+  /// Releases the camera. The OS reclaims it whenever the app leaves the
+  /// foreground, so a controller held across that comes back dead.
+  Future<void> _releaseCamera() async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    if (mounted) {
+      setState(() => _controller = null);
+    } else {
+      _controller = null;
+    }
+
+    if (_isStreaming) {
+      _isStreaming = false;
+      try {
+        await controller.stopImageStream();
+      } catch (e) {
+        debugPrint('WorkoutSessionScreen stopImageStream failed: $e');
+      }
+    }
+    await controller.dispose();
+  }
+
+  /// Restores the camera after the app comes back to the foreground.
+  Future<void> _ensureCamera() async {
+    if (!mounted || _controller != null || _cameras.isEmpty) return;
+    await _startCamera(_cameraIndex);
+  }
+
+  /// Disables the button straight away, then queues the switch behind any
+  /// camera work already running.
+  void _requestCameraSwitch() {
+    if (_isSwitching || _cameras.length < 2) return;
+    setState(() => _isSwitching = true);
+    _enqueue(_switchCamera);
   }
 
   Future<void> _switchCamera() async {
-    if (_isSwitching || _cameras.length < 2) return;
-    setState(() => _isSwitching = true);
+    try {
+      await _releaseCamera();
+      _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+      await _startCamera(_cameraIndex);
+    } finally {
+      // Without this the button stays disabled for good if the switch throws.
+      if (mounted) setState(() => _isSwitching = false);
+    }
+  }
 
-    await _controller?.stopImageStream();
-    await _controller?.dispose();
-    setState(() => _controller = null);
-
-    _cameraIndex = (_cameraIndex + 1) % _cameras.length;
-    await _startCamera(_cameraIndex);
-
-    if (mounted) setState(() => _isSwitching = false);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        // Hand the session back paused rather than resuming mid-rep: the user
+        // is not in position when they return.
+        if (mounted) _notifier.pause();
+        _enqueue(_releaseCamera);
+      case AppLifecycleState.resumed:
+        // Decided inside the queue, not here: a quick background-foreground
+        // flick can deliver `resumed` before the release above has run, and
+        // reading _controller now would see a camera that is about to go away.
+        _enqueue(_ensureCamera);
+    }
   }
 
   @override
   void dispose() {
-    _controller?.stopImageStream();
-    _controller?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      if (_isStreaming) {
+        _isStreaming = false;
+        controller.stopImageStream().catchError((Object _) {});
+      }
+      controller.dispose();
+    }
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }
@@ -115,6 +223,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     final notifier =
         ref.read(workoutSessionNotifierProvider(widget.exerciseId).notifier);
     final controller = _controller;
+
+    ref.listen<SessionStatus>(
+      workoutSessionNotifierProvider(widget.exerciseId)
+          .select((s) => s.status),
+      (prev, next) {
+        if (prev != next) _enqueue(() => _applyStreaming(_wantsFrames(next)));
+      },
+    );
 
     ref.listen<WorkoutSessionState>(
       workoutSessionNotifierProvider(widget.exerciseId),
@@ -233,7 +349,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           IconButton(
             icon: const Icon(Icons.flip_camera_ios_rounded,
                 color: AppColors.textPrimary),
-            onPressed: _isSwitching ? null : _switchCamera,
+            onPressed: _isSwitching ? null : _requestCameraSwitch,
           ),
           IconButton(
             icon: Icon(

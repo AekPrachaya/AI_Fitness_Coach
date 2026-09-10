@@ -7,6 +7,7 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
+import 'session_clock.dart';
 import 'session_stats.dart';
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -127,9 +128,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final ExerciseAnalyzer _analyzer;
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
+  final _clock = SessionClock();
   late final RepCounter _repCounter;
   Timer? _restTimer;
-  DateTime? _startedAt;
 
   /// Read by the summary screen to estimate calories burned.
   double get met => _analyzer.met;
@@ -146,7 +147,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void onCameraReady() {
     if (state.status == SessionStatus.initializing) {
-      _startedAt ??= DateTime.now();
+      _clock.start();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -219,12 +220,14 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void pause() {
     if (state.status == SessionStatus.tracking) {
+      _clock.pause();
       state = state.copyWith(status: SessionStatus.paused);
     }
   }
 
   void resume() {
     if (state.status == SessionStatus.paused) {
+      _clock.resume();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -266,10 +269,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   /// Stamps the totals that only make sense once the session is over.
   WorkoutSessionState _settled(WorkoutSessionState finished) {
-    final started = _startedAt;
     return finished.copyWith(
-      elapsedSeconds:
-          started == null ? 0 : DateTime.now().difference(started).inSeconds,
+      elapsedSeconds: _clock.elapsedSeconds,
       avgFormScore: _stats.avgFormScore,
       mostCommonError: _stats.mostCommonError,
     );
