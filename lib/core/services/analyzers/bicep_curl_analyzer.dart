@@ -32,10 +32,13 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
     final lms = pose.landmarks;
     final issues = <String>[];
 
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final elbow    = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftElbow,    PoseLandmarkType.rightElbow);
+    final arm = ExerciseAnalyzer.bestSide(
+      lms,
+      const [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
+      const [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow],
+    );
 
-    if (shoulder != null && elbow != null) {
+    if (arm case [final shoulder, final elbow]) {
       final upperArmLen = math.sqrt(
         math.pow(elbow.x - shoulder.x, 2) + math.pow(elbow.y - shoulder.y, 2),
       );

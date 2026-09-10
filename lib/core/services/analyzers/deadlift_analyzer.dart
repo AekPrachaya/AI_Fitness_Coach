@@ -27,9 +27,12 @@ class DeadliftAnalyzer extends ExerciseAnalyzer {
     final issues = <String>[];
 
     // 1. Back rounding — torso should stay relatively neutral when hinged
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final hip      = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftHip,      PoseLandmarkType.rightHip);
-    if (shoulder != null && hip != null) {
+    final torso = ExerciseAnalyzer.bestSide(
+      lms,
+      const [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
+      const [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
+    );
+    if (torso case [final shoulder, final hip]) {
       final dx = (shoulder.x - hip.x).abs();
       final dy = (shoulder.y - hip.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _backRoundMax) {

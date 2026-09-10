@@ -40,19 +40,44 @@ abstract class ExerciseAnalyzer {
 
   // ── Helper ────────────────────────────────────────────────────────────────
 
-  /// Returns the landmark with higher confidence between [primary] and [alt].
-  /// Returns null if neither exceeds the 0.65 likelihood threshold.
-  static PoseLandmark? best(
+  /// Minimum ML Kit likelihood for a landmark to be trusted.
+  static const double minLikelihood = 0.65;
+
+  /// Returns the landmarks of whichever body side is tracked more confidently.
+  ///
+  /// [left] and [right] must list the same joints on opposite sides, in the
+  /// same order. Landmarks are always taken from a single side — picking each
+  /// joint independently could mix e.g. a left hip with a right knee, which
+  /// yields a meaningless angle. Returns null unless every joint on at least
+  /// one side clears [minLikelihood]; the returned list matches the input
+  /// order and length.
+  static List<PoseLandmark>? bestSide(
     Map<PoseLandmarkType, PoseLandmark> lms,
-    PoseLandmarkType primary,
-    PoseLandmarkType alt,
+    List<PoseLandmarkType> left,
+    List<PoseLandmarkType> right,
   ) {
-    final p = lms[primary];
-    final a = lms[alt];
-    if (p == null && a == null) return null;
-    if (p == null) return a!.likelihood > 0.65 ? a : null;
-    if (a == null) return p.likelihood > 0.65 ? p : null;
-    final winner = p.likelihood >= a.likelihood ? p : a;
-    return winner.likelihood > 0.65 ? winner : null;
+    final l = _side(lms, left);
+    final r = _side(lms, right);
+    if (l == null) return r?.landmarks;
+    if (r == null) return l.landmarks;
+    return (l.score >= r.score ? l : r).landmarks;
+  }
+
+  /// Scores one side by its least-visible joint — a side is only as reliable
+  /// as its weakest landmark. Returns null if any joint is missing or below
+  /// [minLikelihood].
+  static ({double score, List<PoseLandmark> landmarks})? _side(
+    Map<PoseLandmarkType, PoseLandmark> lms,
+    List<PoseLandmarkType> types,
+  ) {
+    final landmarks = <PoseLandmark>[];
+    var worst = double.infinity;
+    for (final type in types) {
+      final lm = lms[type];
+      if (lm == null || lm.likelihood <= minLikelihood) return null;
+      if (lm.likelihood < worst) worst = lm.likelihood;
+      landmarks.add(lm);
+    }
+    return (score: worst, landmarks: landmarks);
   }
 }

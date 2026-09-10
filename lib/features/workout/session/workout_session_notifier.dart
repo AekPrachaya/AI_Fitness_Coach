@@ -67,6 +67,10 @@ class WorkoutSessionState {
     String? errorMessage,
     List<Pose>? poses,
     Size? absoluteImageSize,
+    // `x ?? this.x` cannot express "set back to null", so clearing the
+    // frame-scoped fields (body left the frame) needs explicit flags.
+    bool clearJointAngle = false,
+    bool clearFormResult = false,
   }) {
     return WorkoutSessionState(
       status: status ?? this.status,
@@ -76,9 +80,9 @@ class WorkoutSessionState {
       repCount: repCount ?? this.repCount,
       totalReps: totalReps ?? this.totalReps,
       restSecondsLeft: restSecondsLeft ?? this.restSecondsLeft,
-      jointAngle: jointAngle ?? this.jointAngle,
+      jointAngle: clearJointAngle ? null : (jointAngle ?? this.jointAngle),
       angleLabel: angleLabel ?? this.angleLabel,
-      formResult: formResult ?? this.formResult,
+      formResult: clearFormResult ? null : (formResult ?? this.formResult),
       errorMessage: errorMessage,
       poses: poses ?? this.poses,
       absoluteImageSize: absoluteImageSize ?? this.absoluteImageSize,
@@ -129,22 +133,24 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     if (poses.isEmpty) {
       state = state.copyWith(
         poses: [],
-        jointAngle: null,
-        formResult: null,
+        clearJointAngle: true,
+        clearFormResult: true,
         absoluteImageSize: absSize,
       );
       return;
     }
 
     final lms = poses.first.landmarks;
-    final a = ExerciseAnalyzer.best(lms, _analyzer.primaryA, _analyzer.altA);
-    final b = ExerciseAnalyzer.best(lms, _analyzer.primaryB, _analyzer.altB);
-    final c = ExerciseAnalyzer.best(lms, _analyzer.primaryC, _analyzer.altC);
+    final joints = ExerciseAnalyzer.bestSide(
+      lms,
+      [_analyzer.primaryA, _analyzer.primaryB, _analyzer.primaryC],
+      [_analyzer.altA, _analyzer.altB, _analyzer.altC],
+    );
 
     double? angle;
     FormResult? form;
 
-    if (a != null && b != null && c != null) {
+    if (joints case [final a, final b, final c]) {
       angle = calculateAngle(a, b, c);
       form = _analyzer.analyze(poses.first, angle);
 
@@ -172,7 +178,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     state = state.copyWith(
       poses: poses,
       jointAngle: angle,
+      clearJointAngle: angle == null,
       formResult: form,
+      clearFormResult: form == null,
       repCount: _repCounter.count,
       absoluteImageSize: absSize,
     );

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -56,7 +58,10 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     final controller = CameraController(
       camera,
       ResolutionPreset.medium,
-      imageFormatGroup: ImageFormatGroup.bgra8888,
+      // Must match what PoseDetectionService decodes: BGRA on iOS,
+      // YUV 420 on Android. bgra8888 is not supported by the Android camera.
+      imageFormatGroup:
+          Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
       enableAudio: false,
     );
     await controller.initialize();

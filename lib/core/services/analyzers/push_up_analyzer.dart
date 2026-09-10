@@ -28,10 +28,20 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
     final issues = <String>[];
 
     // 1. Plank alignment — shoulder, hip, knee should be in a straight line
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final hip      = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftHip,      PoseLandmarkType.rightHip);
-    final knee     = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftKnee,     PoseLandmarkType.rightKnee);
-    if (shoulder != null && hip != null && knee != null) {
+    final chain = ExerciseAnalyzer.bestSide(
+      lms,
+      const [
+        PoseLandmarkType.leftShoulder,
+        PoseLandmarkType.leftHip,
+        PoseLandmarkType.leftKnee,
+      ],
+      const [
+        PoseLandmarkType.rightShoulder,
+        PoseLandmarkType.rightHip,
+        PoseLandmarkType.rightKnee,
+      ],
+    );
+    if (chain case [final shoulder, final hip, final knee]) {
       final plankAngle = _angleDeg(shoulder, hip, knee);
       if (plankAngle < _plankMinAngle) issues.add('หลังแอ่น หรือสะโพกหย่อน');
     }
