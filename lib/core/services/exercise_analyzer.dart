@@ -48,6 +48,14 @@ abstract class ExerciseAnalyzer {
   /// energy a finished session burned.
   double get met;
 
+  /// Dead-band around each rep threshold, in degrees.
+  ///
+  /// A wider band rejects more jitter but demands a fuller rep, so it cannot
+  /// be one number for every exercise: a lockout that is easy at the top of a
+  /// curl is near the limit of most people's elbow extension in a push-up.
+  /// These are starting points and want tuning against real footage.
+  double get hysteresis => 8.0;
+
   FormResult analyze(Pose pose, double angle);
 
   // ── Factory ───────────────────────────────────────────────────────────────

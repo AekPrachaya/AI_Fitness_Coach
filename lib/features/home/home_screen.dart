@@ -23,8 +23,7 @@ class HomeScreen extends ConsumerWidget {
     final auth = ref.watch(authNotifierProvider);
     final name = auth.userName ?? 'Athlete';
     final workoutsAsync = ref.watch(_workoutsProvider);
-    final repo = ref.watch(workoutRepositoryProvider);
-    final recentSessions = repo.getRealSessions();
+    final recentSessions = ref.watch(recentSessionsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -282,7 +281,12 @@ class _ExerciseCard extends StatelessWidget {
     return AppCard(
       onTap: () => context.push(
         RouteNames.workoutSession,
-        extra: {'exerciseId': workout.id, 'exerciseName': workout.name},
+        extra: {
+          'exerciseId': workout.id,
+          'exerciseName': workout.name,
+          'targetSets': workout.defaultSets,
+          'targetReps': workout.defaultReps,
+        },
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

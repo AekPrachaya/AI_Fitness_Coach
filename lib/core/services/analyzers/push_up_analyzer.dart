@@ -14,6 +14,7 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
   @override double get met         => 3.8; // calisthenics, moderate effort
+  @override double get hysteresis  => 6.0; // a full elbow lockout is hard to hold in a plank
 
   static const _analyzeThreshold = 110.0;
   static const _depthThreshold   = 90.0;

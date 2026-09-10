@@ -20,6 +20,8 @@ class WorkoutSessionScreen extends ConsumerStatefulWidget {
     super.key,
     required this.exerciseId,
     required this.exerciseName,
+    this.targetSets,
+    this.targetReps,
   });
 
   final String exerciseId;
@@ -27,6 +29,11 @@ class WorkoutSessionScreen extends ConsumerStatefulWidget {
   /// Display name, e.g. 'Bicep Curls' — carried through so the summary and the
   /// stored history never show the raw id.
   final String exerciseName;
+
+  /// The workout's own targets, as advertised on the home card. Null falls
+  /// back to the notifier's defaults.
+  final int? targetSets;
+  final int? targetReps;
 
   @override
   ConsumerState<WorkoutSessionScreen> createState() =>
@@ -84,6 +91,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     if (!mounted) return;
 
     final notifier = _notifier;
+    notifier.setTargets(sets: widget.targetSets, reps: widget.targetReps);
     await notifier.startSession();
     notifier.onCameraReady();
   }

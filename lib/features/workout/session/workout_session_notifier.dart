@@ -118,12 +118,12 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   WorkoutSessionNotifier(String exerciseId)
       : _analyzer = ExerciseAnalyzer.forId(exerciseId),
         super(const WorkoutSessionState()) {
-    final analyzer = ExerciseAnalyzer.forId(exerciseId);
     _repCounter = RepCounter(
-      downThreshold: analyzer.downThreshold,
-      upThreshold: analyzer.upThreshold,
+      downThreshold: _analyzer.downThreshold,
+      upThreshold: _analyzer.upThreshold,
+      hysteresis: _analyzer.hysteresis,
     );
-    state = state.copyWith(angleLabel: analyzer.angleLabel);
+    state = state.copyWith(angleLabel: _analyzer.angleLabel);
   }
 
   final ExerciseAnalyzer _analyzer;
@@ -141,6 +141,16 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   Map<String, int> get errorCounts => _stats.errorCounts;
 
   // ── Public API ────────────────────────────────────────────────────────────
+
+  /// Applies the workout's own set and rep targets. Only takes effect before
+  /// the session starts, so a rebuild cannot resize a set already under way.
+  void setTargets({int? sets, int? reps}) {
+    if (state.status != SessionStatus.idle) return;
+    state = state.copyWith(
+      targetSets: sets != null && sets > 0 ? sets : null,
+      targetReps: reps != null && reps > 0 ? reps : null,
+    );
+  }
 
   Future<void> startSession() async {
     if (state.status != SessionStatus.idle) return;

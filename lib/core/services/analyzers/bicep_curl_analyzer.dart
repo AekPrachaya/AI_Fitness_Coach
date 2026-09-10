@@ -14,6 +14,7 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override double get upThreshold   => 150.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
   @override double get met         => 3.5; // isolated arm work, light effort
+  @override double get hysteresis  => 10.0; // fast movement over a wide range; swings jitter
 
   static const _analyzeThreshold = 120.0;
   // Ratios relative to upper-arm length (shoulder→elbow), so checks scale

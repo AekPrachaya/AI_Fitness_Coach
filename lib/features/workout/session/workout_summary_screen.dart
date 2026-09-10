@@ -72,6 +72,9 @@ class _WorkoutSummaryScreenState extends ConsumerState<WorkoutSummaryScreen> {
         },
       ],
     });
+
+    // The home screen holds a cached read of the box.
+    ref.invalidate(recentSessionsProvider);
   }
 
   int get _estimatedCalories => SessionStats.estimateCalories(

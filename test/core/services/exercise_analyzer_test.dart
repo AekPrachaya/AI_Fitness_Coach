@@ -69,6 +69,38 @@ void main() {
     });
   });
 
+  group('per-exercise tuning', () {
+    final analyzers = {
+      'squats': ExerciseAnalyzer.forId('squats'),
+      'push_ups': ExerciseAnalyzer.forId('push_ups'),
+      'deadlifts': ExerciseAnalyzer.forId('deadlifts'),
+      'bicep_curls': ExerciseAnalyzer.forId('bicep_curls'),
+    };
+
+    test('thresholds leave a usable range of motion', () {
+      analyzers.forEach((id, a) {
+        expect(a.downThreshold, lessThan(a.upThreshold), reason: id);
+      });
+    });
+
+    test('the dead-band cannot swallow the range of motion', () {
+      // Hysteresis is applied at both ends, so twice it must still fit inside
+      // the span or no rep could ever be counted.
+      analyzers.forEach((id, a) {
+        expect(a.hysteresis * 2, lessThan(a.upThreshold - a.downThreshold),
+            reason: id);
+        expect(a.hysteresis, greaterThan(0), reason: id);
+      });
+    });
+
+    test('every exercise carries a plausible MET and a label', () {
+      analyzers.forEach((id, a) {
+        expect(a.met, inExclusiveRange(1, 20), reason: id);
+        expect(a.angleLabel, isNotEmpty, reason: id);
+      });
+    });
+  });
+
   group('bestSide', () {
     test('picks the side whose weakest joint is strongest', () {
       final lms = lmsOf([
