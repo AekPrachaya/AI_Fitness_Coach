@@ -13,6 +13,7 @@ import '../../../shared/models/models.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../detail/workout_detail_provider.dart';
 import 'pre_workout_provider.dart';
+import 'widgets/camera_permission_dialog.dart';
 import 'widgets/countdown_overlay.dart';
 import 'widgets/position_guide.dart';
 import 'widgets/setup_checklist_item.dart';
@@ -79,48 +80,9 @@ class _PreWorkoutScreenState extends ConsumerState<PreWorkoutScreen>
     ref
         .read(preWorkoutNotifierProvider(widget.workoutId).notifier)
         .setCameraGranted(status.isGranted);
-    if (status == PermissionStatus.permanentlyDenied) _showSettingsDialog();
-  }
-
-  void _showSettingsDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Text(
-          'Camera Access Required',
-          style: Theme.of(dialogContext).textTheme.titleLarge,
-        ),
-        content: Text(
-          'Camera permission was denied. To track your form, please allow '
-          'camera access in your device settings.',
-          style: Theme.of(dialogContext)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await openAppSettings();
-            },
-            child: Text(
-              'Open Settings',
-              style: TextStyle(color: AppColors.accent),
-            ),
-          ),
-        ],
-      ),
-    );
+    if (status == PermissionStatus.permanentlyDenied) {
+      showCameraSettingsDialog(context);
+    }
   }
 
   // ── Countdown ───────────────────────────────────────────────────────────
