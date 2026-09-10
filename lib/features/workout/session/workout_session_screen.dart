@@ -11,6 +11,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import 'widgets/pose_overlay_painter.dart';
 import 'widgets/rest_overlay.dart';
+import 'widgets/set_complete_overlay.dart';
+import 'widgets/tracking_error_overlay.dart';
 import 'workout_session_notifier.dart';
 
 class WorkoutSessionScreen extends ConsumerStatefulWidget {
@@ -307,6 +309,17 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
               right: AppSpacing.md,
               bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
               child: _buildHud(context, session),
+            ),
+
+          if (session.status == SessionStatus.error &&
+              session.errorMessage != null)
+            TrackingErrorOverlay(message: session.errorMessage!),
+
+          if (session.status == SessionStatus.setComplete)
+            SetCompleteOverlay(
+              currentSet: session.currentSet,
+              targetSets: session.targetSets,
+              reps: session.repCount,
             ),
 
           if (session.status == SessionStatus.resting)

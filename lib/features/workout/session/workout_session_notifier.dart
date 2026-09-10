@@ -9,6 +9,7 @@ import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
 import 'session_clock.dart';
 import 'session_stats.dart';
+import 'tracking_watchdog.dart';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();
+  final _watchdog = TrackingWatchdog();
   late final RepCounter _repCounter;
   Timer? _restTimer;
 
@@ -153,7 +155,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   }
 
   void processFrame(CameraImage image, CameraDescription camera) async {
-    if (state.status != SessionStatus.tracking) return;
+    // Error keeps processing: it is how the session notices the body is back.
+    if (state.status != SessionStatus.tracking &&
+        state.status != SessionStatus.error) {
+      return;
+    }
 
     final poses = await _poseService.processFrame(image, camera);
     if (poses == null) return;
@@ -161,11 +167,13 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final absSize = Size(image.width.toDouble(), image.height.toDouble());
 
     if (poses.isEmpty) {
+      _applyTracking(TrackingLoss.noBody);
       state = state.copyWith(
         poses: [],
         clearJointAngle: true,
         clearFormResult: true,
         absoluteImageSize: absSize,
+        errorMessage: state.errorMessage,
       );
       return;
     }
@@ -177,10 +185,13 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       [_analyzer.altA, _analyzer.altB, _analyzer.altC],
     );
 
+    _applyTracking(joints == null ? TrackingLoss.lowConfidence : null);
+
     double? angle;
     FormResult? form;
 
     if (joints case [final a, final b, final c]) {
+      if (state.status != SessionStatus.tracking) return;
       angle = calculateAngle(a, b, c);
       form = _analyzer.analyze(poses.first, angle);
       _stats.observe(form);
@@ -190,7 +201,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         _stats.commitRep();
         final newCount = _repCounter.count;
         if (newCount >= state.targetReps) {
-          _onSetComplete();
+          await _onSetComplete();
           return;
         }
         state = state.copyWith(
@@ -202,7 +213,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
           absoluteImageSize: absSize,
         );
         await Future.delayed(const Duration(milliseconds: 600));
-        if (mounted) state = state.copyWith(status: SessionStatus.tracking);
+        // Only resume if nothing else moved the session on — backgrounding the
+        // app mid-flash pauses it, and that must stick.
+        if (mounted && state.status == SessionStatus.repComplete) {
+          state = state.copyWith(status: SessionStatus.tracking);
+        }
         return;
       }
     }
@@ -215,11 +230,36 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       clearFormResult: form == null,
       repCount: _repCounter.count,
       absoluteImageSize: absSize,
+      errorMessage: state.errorMessage,
     );
   }
 
+  /// Moves the session between tracking and error as detection comes and goes.
+  void _applyTracking(TrackingLoss? loss) {
+    final sustained = _watchdog.observe(loss);
+
+    if (sustained != null && state.status == SessionStatus.tracking) {
+      state = state.copyWith(
+        status: SessionStatus.error,
+        errorMessage: _messageFor(sustained),
+      );
+      return;
+    }
+    if (loss == null && state.status == SessionStatus.error) {
+      state = state.copyWith(status: SessionStatus.tracking);
+    }
+  }
+
+  static String _messageFor(TrackingLoss loss) => switch (loss) {
+        TrackingLoss.noBody => 'ไม่เห็นตัวคุณ — ถอยห่างให้กล้องเห็นทั้งตัว',
+        TrackingLoss.lowConfidence =>
+          'มองข้อต่อไม่ชัด — ลองเพิ่มแสงหรือปรับมุมกล้อง',
+      };
+
   void pause() {
-    if (state.status == SessionStatus.tracking) {
+    if (state.status == SessionStatus.tracking ||
+        state.status == SessionStatus.repComplete ||
+        state.status == SessionStatus.error) {
       _clock.pause();
       state = state.copyWith(status: SessionStatus.paused);
     }
@@ -228,6 +268,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   void resume() {
     if (state.status == SessionStatus.paused) {
       _clock.resume();
+      // Detection starts over rather than resuming into a stale error.
+      _watchdog.reset();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -246,22 +288,31 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  void _onSetComplete() {
+  /// How long the "set done" beat is held before the rest timer takes over.
+  static const _setCompletePause = Duration(milliseconds: 900);
+
+  Future<void> _onSetComplete() async {
     _restTimer?.cancel();
+    _watchdog.reset();
+
     final setReps = _repCounter.count;
-    final newTotal = state.totalReps + setReps;
-    if (state.currentSet >= state.targetSets) {
-      state = _settled(state.copyWith(
-        status: SessionStatus.finished,
-        repCount: setReps,
-        totalReps: newTotal,
-      ));
+    final isLastSet = state.currentSet >= state.targetSets;
+
+    state = state.copyWith(
+      status: SessionStatus.setComplete,
+      repCount: setReps,
+      totalReps: state.totalReps + setReps,
+    );
+
+    await Future.delayed(_setCompletePause);
+    if (!mounted || state.status != SessionStatus.setComplete) return;
+
+    if (isLastSet) {
+      state = _settled(state.copyWith(status: SessionStatus.finished));
       return;
     }
     state = state.copyWith(
       status: SessionStatus.resting,
-      repCount: setReps,
-      totalReps: newTotal,
       restSecondsLeft: 60,
     );
     _startRestTimer();
@@ -290,6 +341,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void _startNextSet() {
     _repCounter.reset();
+    _watchdog.reset();
     state = state.copyWith(
       status: SessionStatus.tracking,
       currentSet: state.currentSet + 1,
