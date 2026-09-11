@@ -13,6 +13,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 100.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'เข่า (องศา)';
+  @override double get met         => 5.0; // bodyweight squats, vigorous effort
 
   static const _analyzeThreshold = 130.0;
   static const _depthThreshold   = 90.0;
@@ -22,7 +23,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
@@ -32,9 +33,12 @@ class SquatAnalyzer extends ExerciseAnalyzer {
     if (angle > _depthThreshold) issues.add('ลงให้ลึกกว่านี้');
 
     // 2. Knee over toe
-    final knee  = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftKnee,  PoseLandmarkType.rightKnee);
-    final ankle = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftAnkle, PoseLandmarkType.rightAnkle);
-    if (knee != null && ankle != null) {
+    final leg = ExerciseAnalyzer.bestSide(
+      lms,
+      const [PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle],
+      const [PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle],
+    );
+    if (leg case [final knee, final ankle]) {
       final dx = (knee.x - ankle.x).abs();
       final dy = (knee.y - ankle.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _shinForwardMax) {
@@ -43,9 +47,12 @@ class SquatAnalyzer extends ExerciseAnalyzer {
     }
 
     // 3. Torso lean
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final hip      = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftHip,      PoseLandmarkType.rightHip);
-    if (shoulder != null && hip != null) {
+    final torso = ExerciseAnalyzer.bestSide(
+      lms,
+      const [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
+      const [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
+    );
+    if (torso case [final shoulder, final hip]) {
       final dx = (shoulder.x - hip.x).abs();
       final dy = (shoulder.y - hip.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _torsoLeanMax) {
@@ -53,8 +60,6 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 }

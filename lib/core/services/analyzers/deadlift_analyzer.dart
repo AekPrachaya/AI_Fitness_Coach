@@ -13,6 +13,7 @@ class DeadliftAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 80.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'สะโพก (องศา)';
+  @override double get met         => 6.0; // free-weight hinge, vigorous effort
 
   static const _analyzeThreshold = 120.0;
   static const _backRoundMax = 35.0; // max torso tilt from vertical (degrees)
@@ -20,16 +21,19 @@ class DeadliftAnalyzer extends ExerciseAnalyzer {
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
     final issues = <String>[];
 
     // 1. Back rounding — torso should stay relatively neutral when hinged
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final hip      = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftHip,      PoseLandmarkType.rightHip);
-    if (shoulder != null && hip != null) {
+    final torso = ExerciseAnalyzer.bestSide(
+      lms,
+      const [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
+      const [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
+    );
+    if (torso case [final shoulder, final hip]) {
       final dx = (shoulder.x - hip.x).abs();
       final dy = (shoulder.y - hip.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _backRoundMax) {
@@ -37,8 +41,6 @@ class DeadliftAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 }

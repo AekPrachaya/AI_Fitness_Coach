@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'preview_transform.dart';
 
 class PoseOverlayPainter extends CustomPainter {
   PoseOverlayPainter({
@@ -36,8 +37,12 @@ class PoseOverlayPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (poses.isEmpty) return;
 
-    final scaleX = size.width / absoluteImageSize.width;
-    final scaleY = size.height / absoluteImageSize.height;
+    // Same cover-fit the preview widget uses; anything else and the bones sit
+    // beside the body rather than on it.
+    final transform = PreviewTransform.cover(
+      image: absoluteImageSize,
+      canvas: size,
+    );
 
     final bonePaint = Paint()
       ..color = AppColors.accent.withValues(alpha: 0.8)
@@ -61,8 +66,8 @@ class PoseOverlayPainter extends CustomPainter {
         if (a == null || b == null) continue;
         if (a.likelihood < 0.5 || b.likelihood < 0.5) continue;
         canvas.drawLine(
-          _point(a, scaleX, scaleY, size.width),
-          _point(b, scaleX, scaleY, size.width),
+          transform.map(a.x, a.y),
+          transform.map(b.x, b.y),
           bonePaint,
         );
       }
@@ -70,17 +75,13 @@ class PoseOverlayPainter extends CustomPainter {
       // Landmark dots
       for (final lm in pose.landmarks.values) {
         if (lm.likelihood < 0.5) continue;
-        final pt = _point(lm, scaleX, scaleY, size.width);
+        final pt = transform.map(lm.x, lm.y);
         // Outer white ring
         canvas.drawCircle(pt, 6.0, dotPaint);
         // Inner accent fill
         canvas.drawCircle(pt, 4.0, activeDotPaint);
       }
     }
-  }
-
-  Offset _point(PoseLandmark lm, double sx, double sy, double canvasWidth) {
-    return Offset(lm.x * sx, lm.y * sy);
   }
 
   @override

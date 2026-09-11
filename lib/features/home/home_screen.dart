@@ -23,8 +23,7 @@ class HomeScreen extends ConsumerWidget {
     final auth = ref.watch(authNotifierProvider);
     final name = auth.userName ?? 'Athlete';
     final workoutsAsync = ref.watch(_workoutsProvider);
-    final repo = ref.watch(workoutRepositoryProvider);
-    final recentSessions = repo.getRealSessions();
+    final recentSessions = ref.watch(recentSessionsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -159,6 +158,7 @@ class _RecentSessionCard extends StatelessWidget {
     final reps = session['total_reps'] as int? ?? 0;
     final raw = session['completed_at'] as String? ?? '';
     final when = raw.isNotEmpty ? _formatDate(raw) : '';
+    final score = (session['avg_form_score'] as num?)?.toDouble() ?? 0;
 
     final exercises = session['exercises'] as List<dynamic>? ?? [];
     final sets = exercises.isNotEmpty
@@ -199,7 +199,15 @@ class _RecentSessionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(name, style: tt.titleSmall),
+                Row(
+                  children: [
+                    Flexible(child: Text(name, style: tt.titleSmall)),
+                    if (score > 0) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      _scoreChip(context, score),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -218,6 +226,27 @@ class _RecentSessionCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _scoreChip(BuildContext context, double score) {
+    final color = AppColors.formScoreColor(score);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: AppRadius.smAll,
+      ),
+      child: Text(
+        'ฟอร์ม ${score.toStringAsFixed(0)}%',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }
@@ -243,10 +272,6 @@ class _ExerciseCard extends StatelessWidget {
 
   final Workout workout;
 
-  static const _activeId = 'squats';
-
-  bool get _isActive => workout.id == _activeId;
-
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -254,12 +279,15 @@ class _ExerciseCard extends StatelessWidget {
     final diffLabel = _diffLabel(workout.difficulty);
 
     return AppCard(
-      onTap: _isActive
-          ? () => context.push(RouteNames.workoutSession,
-                extra: {'exerciseId': workout.id})
-          : null,
-      backgroundColor:
-          _isActive ? null : AppColors.surface.withValues(alpha: 0.6),
+      onTap: () => context.push(
+        RouteNames.workoutSession,
+        extra: {
+          'exerciseId': workout.id,
+          'exerciseName': workout.name,
+          'targetSets': workout.defaultSets,
+          'targetReps': workout.defaultReps,
+        },
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -268,13 +296,12 @@ class _ExerciseCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: (_isActive ? AppColors.accent : AppColors.textSecondary)
-                  .withValues(alpha: 0.12),
+              color: AppColors.accent.withValues(alpha: 0.12),
               borderRadius: AppRadius.smAll,
             ),
             child: Icon(
               _iconFor(workout.id),
-              color: _isActive ? AppColors.accent : AppColors.textSecondary,
+              color: AppColors.accent,
               size: 24,
             ),
           ),
@@ -290,11 +317,7 @@ class _ExerciseCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         workout.name,
-                        style: tt.titleSmall?.copyWith(
-                          color: _isActive
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
-                        ),
+                        style: tt.titleSmall,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -320,27 +343,11 @@ class _ExerciseCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
 
           // Action
-          if (_isActive)
-            const Icon(
-              Icons.play_circle_filled_rounded,
-              color: AppColors.accent,
-              size: 32,
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.smAll,
-                border: Border.all(color: AppColors.borderSubtle),
-              ),
-              child: Text(
-                'เร็วๆ นี้',
-                style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
-              ),
-            ),
+          const Icon(
+            Icons.play_circle_filled_rounded,
+            color: AppColors.accent,
+            size: 32,
+          ),
         ],
       ),
     );

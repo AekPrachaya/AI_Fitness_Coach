@@ -13,6 +13,8 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
   @override double get downThreshold => 90.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
+  @override double get met         => 3.8; // calisthenics, moderate effort
+  @override double get hysteresis  => 6.0; // a full elbow lockout is hard to hold in a plank
 
   static const _analyzeThreshold = 110.0;
   static const _depthThreshold   = 90.0;
@@ -21,17 +23,27 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
-      return const FormResult(score: FormScore.good, feedback: '');
+      return FormResult.notEvaluated;
     }
 
     final lms = pose.landmarks;
     final issues = <String>[];
 
     // 1. Plank alignment — shoulder, hip, knee should be in a straight line
-    final shoulder = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-    final hip      = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftHip,      PoseLandmarkType.rightHip);
-    final knee     = ExerciseAnalyzer.best(lms, PoseLandmarkType.leftKnee,     PoseLandmarkType.rightKnee);
-    if (shoulder != null && hip != null && knee != null) {
+    final chain = ExerciseAnalyzer.bestSide(
+      lms,
+      const [
+        PoseLandmarkType.leftShoulder,
+        PoseLandmarkType.leftHip,
+        PoseLandmarkType.leftKnee,
+      ],
+      const [
+        PoseLandmarkType.rightShoulder,
+        PoseLandmarkType.rightHip,
+        PoseLandmarkType.rightKnee,
+      ],
+    );
+    if (chain case [final shoulder, final hip, final knee]) {
       final plankAngle = _angleDeg(shoulder, hip, knee);
       if (plankAngle < _plankMinAngle) issues.add('หลังแอ่น หรือสะโพกหย่อน');
     }
@@ -39,9 +51,7 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
     // 2. Depth — elbow must reach below 90°
     if (angle > _depthThreshold) issues.add('ลงให้ถึงกว่านี้');
 
-    if (issues.isEmpty) return const FormResult(score: FormScore.good,  feedback: 'ท่าดีมาก!');
-    if (issues.length == 1) return FormResult(score: FormScore.fair, feedback: issues.first);
-    return FormResult(score: FormScore.poor, feedback: issues.join(' · '));
+    return ExerciseAnalyzer.verdict(issues);
   }
 
   // Angle at vertex [b] formed by points a-b-c, in degrees.

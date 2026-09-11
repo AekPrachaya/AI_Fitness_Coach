@@ -32,3 +32,12 @@ class WorkoutRepository {
 final workoutRepositoryProvider = Provider<WorkoutRepository>(
   (ref) => WorkoutRepository(),
 );
+
+/// Completed sessions, newest first.
+///
+/// Hive reads are synchronous, so doing this in a widget's build would re-read
+/// the box on every rebuild and never notice a new session. Invalidate this
+/// after [WorkoutRepository.saveSession] to refresh what is on screen.
+final recentSessionsProvider = Provider<List<Map<String, dynamic>>>(
+  (ref) => ref.watch(workoutRepositoryProvider).getRealSessions(),
+);
