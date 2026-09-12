@@ -3,6 +3,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 abstract class AppTypography {
+  /// Bebas numeral larger than [TextTheme.displayLarge] (80) — used by the
+  /// 3-2-1 session countdown, where the numeral has to read across a room.
+  static const double countdownNumeralSize = 120.0;
+
+  static TextStyle get countdownNumeral => GoogleFonts.bebasNeue(
+        fontSize: countdownNumeralSize,
+        letterSpacing: 4.0,
+        height: 1.0,
+        color: AppColors.textPrimary,
+      );
+
   static TextTheme get textTheme => TextTheme(
         // ── Bebas Neue — large display, rep counters, hero numbers ─────────
         displayLarge: GoogleFonts.bebasNeue(

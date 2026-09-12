@@ -86,5 +86,7 @@ class PoseOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(PoseOverlayPainter old) =>
-      old.poses != poses || old.absoluteImageSize != absoluteImageSize;
+      old.poses != poses ||
+      old.absoluteImageSize != absoluteImageSize ||
+      old.isFrontCamera != isFrontCamera;
 }

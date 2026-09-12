@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/providers/user_profile_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../data/workout_repository.dart';
+import 'session_stats.dart';
 import 'widgets/pose_overlay_painter.dart';
 import 'widgets/rest_overlay.dart';
 import 'widgets/set_complete_overlay.dart';
@@ -226,6 +229,47 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     super.dispose();
   }
 
+  /// Writes the finished session to history.
+  ///
+  /// This belongs to the session rather than to the summary screen: the summary
+  /// is only a view of the result, and a workout that was actually performed
+  /// has to be recorded whether or not the user ever looks at it.
+  void _saveSession(WorkoutSessionState state) {
+    final repo = ref.read(workoutRepositoryProvider);
+    final calories = SessionStats.estimateCalories(
+      met: ExerciseAnalyzer.forId(widget.exerciseId).met,
+      weightKg: ref.read(userProfileProvider).weightKg,
+      durationSeconds: state.elapsedSeconds,
+    );
+
+    repo.saveSession({
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'workout_id': widget.exerciseId,
+      'workout_name': widget.exerciseName,
+      'completed_at': DateTime.now().toIso8601String(),
+      'duration_seconds': state.elapsedSeconds,
+      'total_reps': state.totalReps,
+      'avg_form_score': state.avgFormScore,
+      'estimated_calories': calories,
+      'most_common_error': state.mostCommonError,
+      // Left to the AI backend; no coaching text is generated on-device.
+      'ai_tip': '',
+      'exercises': [
+        {
+          'exercise_id': widget.exerciseId,
+          'exercise_name': widget.exerciseName,
+          'sets_completed': state.currentSet,
+          'total_reps': state.totalReps,
+          'avg_form_score': state.avgFormScore,
+          'most_common_error': state.mostCommonError,
+        },
+      ],
+    });
+
+    // The home screen holds a cached read of the box.
+    ref.invalidate(recentSessionsProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session =
@@ -247,16 +291,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       (prev, next) {
         if (next.status == SessionStatus.finished &&
             prev?.status != SessionStatus.finished) {
-          context.go(RouteNames.workoutSummary, extra: {
-            'exerciseId': widget.exerciseId,
-            'exerciseName': widget.exerciseName,
-            'setsCompleted': next.currentSet,
-            'targetSets': next.targetSets,
-            'totalReps': next.totalReps,
-            'durationSeconds': next.elapsedSeconds,
-            'avgFormScore': next.avgFormScore,
-            'mostCommonError': next.mostCommonError,
-          });
+          _saveSession(next);
+          context.go(RouteNames.workoutSummaryPath(widget.exerciseId));
         }
       },
     );

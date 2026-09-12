@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/typography_preview.dart';
@@ -17,9 +18,48 @@ import '../../features/auth/register_screen.dart';
 import '../../features/onboarding/splash_screen.dart';
 import '../../features/onboarding/welcome_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/workout/browse/workout_browse_screen.dart';
+import '../../features/workout/detail/workout_detail_provider.dart';
+import '../../features/workout/detail/workout_detail_screen.dart';
+import '../../features/workout/session/pre_workout_screen.dart';
 import '../../features/workout/session/workout_session_screen.dart';
-import '../../features/workout/session/workout_summary_screen.dart';
+import '../../features/workout/summary/workout_summary_screen.dart';
+import '../../features/progress/progress_screen.dart';
+import '../../features/profile/profile_screen.dart';
+import '../../shared/widgets/app_shell.dart';
 import 'route_names.dart';
+
+// ── Page transition helper ───────────────────────────────────────────────────
+// SPEC: "Default: Fade + slight vertical slide (200ms)"
+
+CustomTransitionPage<void> _fadePage({
+  required LocalKey key,
+  required Widget child,
+}) =>
+    CustomTransitionPage<void>(
+      key: key,
+      child: child,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeIn,
+        ),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          )),
+          child: child,
+        ),
+      ),
+      transitionDuration: const Duration(milliseconds: 200),
+    );
+
+// ── Router ───────────────────────────────────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -66,41 +106,87 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.login,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: RouteNames.home,
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.workoutSession,
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>?;
-          final exerciseId = extra?['exerciseId'] as String? ?? 'squats';
-          return WorkoutSessionScreen(
-            exerciseId: exerciseId,
-            exerciseName:
-                extra?['exerciseName'] as String? ?? displayNameFor(exerciseId),
-            targetSets: extra?['targetSets'] as int?,
-            targetReps: extra?['targetReps'] as int?,
-          );
-        },
-      ),
-      GoRoute(
-        path: RouteNames.workoutSummary,
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>;
-          final exerciseId = extra['exerciseId'] as String? ?? 'squats';
-          return WorkoutSummaryScreen(
-            exerciseId: exerciseId,
-            exerciseName:
-                extra['exerciseName'] as String? ?? displayNameFor(exerciseId),
-            setsCompleted: extra['setsCompleted'] as int,
-            targetSets: extra['targetSets'] as int,
-            totalReps: extra['totalReps'] as int,
-            durationSeconds: extra['durationSeconds'] as int? ?? 0,
-            avgFormScore: (extra['avgFormScore'] as num?)?.toDouble() ?? 0,
-            mostCommonError: extra['mostCommonError'] as String? ?? '',
-          );
-        },
+
+      // ── Main App Shell (4-tab navigation) ──────────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => AppShell(child: child),
+        routes: [
+          // Tab 1: Home
+          GoRoute(
+            path: RouteNames.home,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const HomeScreen(),
+            ),
+          ),
+
+          // Tab 2: Workout + nested sub-routes
+          GoRoute(
+            path: RouteNames.workout,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const WorkoutBrowseScreen(),
+            ),
+            routes: [
+              GoRoute(
+                path: ':id',
+                pageBuilder: (context, state) => _fadePage(
+                  key: state.pageKey,
+                  child: WorkoutDetailScreen(
+                    workoutId: state.pathParameters['id']!,
+                  ),
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'pre',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: PreWorkoutScreen(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'session',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: _SessionRoute(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'summary',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: WorkoutSummaryScreen(
+                        workoutId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Tab 3: Progress
+          GoRoute(
+            path: RouteNames.progress,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const ProgressScreen(),
+            ),
+          ),
+
+          // Tab 4: Profile
+          GoRoute(
+            path: RouteNames.profile,
+            pageBuilder: (context, state) => _fadePage(
+              key: state.pageKey,
+              child: const ProfileScreen(),
+            ),
+          ),
+        ],
       ),
 
       // ── Development / debug routes ──────────────────────────────────────
@@ -131,3 +217,29 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Adapts the browse/detail route — which knows a workout only by its id — to
+/// [WorkoutSessionScreen], which needs the display name and the set and rep
+/// targets the user picked on the detail screen.
+///
+/// The name comes from `workouts.json` so the session and the stored history
+/// never show a raw id; [displayNameFor] only covers the moment before that
+/// load settles.
+class _SessionRoute extends ConsumerWidget {
+  const _SessionRoute({required this.workoutId});
+
+  final String workoutId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(workoutPlanProvider(workoutId));
+    final workout = ref.watch(workoutDetailProvider(workoutId)).valueOrNull;
+
+    return WorkoutSessionScreen(
+      exerciseId: workoutId,
+      exerciseName: workout?.name ?? displayNameFor(workoutId),
+      targetSets: plan.sets,
+      targetReps: plan.reps,
+    );
+  }
+}

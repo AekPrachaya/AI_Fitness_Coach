@@ -14,8 +14,16 @@ void main() {
     RouteNames.register,
     RouteNames.login,
     RouteNames.home,
-    RouteNames.workoutSession,
+    RouteNames.workout,
+    RouteNames.progress,
+    RouteNames.profile,
+    RouteNames.workoutDetail,
+    RouteNames.preWorkout,
+    RouteNames.session,
     RouteNames.workoutSummary,
+    RouteNames.progressHistory,
+    RouteNames.progressMetrics,
+    RouteNames.settings,
   ];
 
   const debug = [

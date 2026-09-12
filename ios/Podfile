@@ -39,5 +39,14 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # permission_handler compiles each permission behind a PERMISSION_* macro.
+    # Without this the camera strategy is compiled out and every query answers
+    # "denied", however the user answers the system prompt.
+    target.build_configurations.each do |config|
+      defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+      defs = [defs] unless defs.is_a?(Array)
+      defs << 'PERMISSION_CAMERA=1' unless defs.include?('PERMISSION_CAMERA=1')
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
+    end
   end
 end

@@ -1,391 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../core/router/route_names.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/utils/mock_data.dart';
-import '../../features/auth/auth_notifier.dart';
-import '../../features/workout/data/workout_repository.dart';
-import '../../shared/models/models.dart';
-import '../../shared/widgets/app_card.dart';
-
-final _workoutsProvider = FutureProvider<List<Workout>>(
-  (ref) => MockData.loadWorkouts(),
-);
+import 'widgets/achievements_section.dart';
+import 'widgets/home_header.dart';
+import 'widgets/quick_stats_row.dart';
+import 'widgets/recommended_section.dart';
+import 'widgets/today_plan_card.dart';
+import 'widgets/weekly_activity_chart.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authNotifierProvider);
-    final name = auth.userName ?? 'Athlete';
-    final workoutsAsync = ref.watch(_workoutsProvider);
-    final recentSessions = ref.watch(recentSessionsProvider);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Header(name: name, sessionCount: recentSessions.length),
-              const SizedBox(height: AppSpacing.xl),
+        child: CustomScrollView(
+          slivers: [
+            // ── Section 1: Header ────────────────────────────
+            const SliverToBoxAdapter(
+              child: HomeHeader(),
+            ),
 
-              if (recentSessions.isNotEmpty) ...[
-                _RecentSessionCard(session: recentSessions.first),
-                const SizedBox(height: AppSpacing.xl),
-              ],
+            // ── Section 2: Today's Plan Card ──────────────────
+            const SliverToBoxAdapter(
+              child: TodayPlanCard(),
+            ),
 
-              Text(
-                'เลือกท่าออกกำลังกาย',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
+            // ── Section 3: Weekly Activity Chart ─────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: WeeklyActivityChart(),
               ),
-              const SizedBox(height: AppSpacing.md),
+            ),
 
-              workoutsAsync.when(
-                data: (workouts) => Column(
-                  children: workouts
-                      .map((w) => Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.md),
-                            child: _ExerciseCard(workout: w),
-                          ))
-                      .toList(),
-                ),
-                loading: () => Column(
-                  children: List.generate(
-                    3,
-                    (_) => const Padding(
-                      padding: EdgeInsets.only(bottom: AppSpacing.md),
-                      child: AppCard.skeleton(height: 130),
-                    ),
-                  ),
-                ),
-                error: (error, _) => const SizedBox.shrink(),
+            // ── Section 4: Quick Stats Row ────────────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+                child: QuickStatsRow(),
               ),
-            ],
-          ),
+            ),
+
+            // ── Section 5: Recommended for You ───────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(top: AppSpacing.lg),
+                child: RecommendedSection(),
+              ),
+            ),
+
+            // ── Section 6: Achievements ───────────────────────
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(
+                    top: AppSpacing.lg, bottom: AppSpacing.xxl),
+                child: AchievementsSection(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-// ── Header ────────────────────────────────────────────────────────────────────
-
-class _Header extends StatelessWidget {
-  const _Header({required this.name, required this.sessionCount});
-
-  final String name;
-  final int sessionCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('สวัสดี, $name', style: tt.headlineMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'พร้อมออกกำลังกายแล้วหรือยัง?',
-                style: tt.bodyMedium?.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ),
-        if (sessionCount > 0)
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.12),
-              borderRadius: AppRadius.mdAll,
-              border: Border.all(
-                color: AppColors.accent.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  '$sessionCount',
-                  style: tt.titleLarge?.copyWith(
-                    color: AppColors.accent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Sessions',
-                  style: tt.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ── Recent session card ───────────────────────────────────────────────────────
-
-class _RecentSessionCard extends StatelessWidget {
-  const _RecentSessionCard({required this.session});
-
-  final Map<String, dynamic> session;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final name = session['workout_name'] as String? ?? '';
-    final reps = session['total_reps'] as int? ?? 0;
-    final raw = session['completed_at'] as String? ?? '';
-    final when = raw.isNotEmpty ? _formatDate(raw) : '';
-    final score = (session['avg_form_score'] as num?)?.toDouble() ?? 0;
-
-    final exercises = session['exercises'] as List<dynamic>? ?? [];
-    final sets = exercises.isNotEmpty
-        ? (exercises.first as Map<dynamic, dynamic>)['sets_completed'] as int? ??
-            0
-        : 0;
-
-    return AppCard(
-      border: Border(
-        left: BorderSide(color: AppColors.accent, width: 3),
-        top: BorderSide(color: AppColors.borderSubtle),
-        right: BorderSide(color: AppColors.borderSubtle),
-        bottom: BorderSide(color: AppColors.borderSubtle),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.12),
-              borderRadius: AppRadius.smAll,
-            ),
-            child: const Icon(
-              Icons.history_rounded,
-              color: AppColors.accent,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ออกกำลังกายล่าสุด',
-                  style: tt.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Flexible(child: Text(name, style: tt.titleSmall)),
-                    if (score > 0) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      _scoreChip(context, score),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$sets sets · $reps reps',
-                style: tt.bodySmall?.copyWith(color: AppColors.accent),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                when,
-                style: tt.labelSmall?.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _scoreChip(BuildContext context, double score) {
-    final color = AppColors.formScoreColor(score);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: AppRadius.smAll,
-      ),
-      child: Text(
-        'ฟอร์ม ${score.toStringAsFixed(0)}%',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-      ),
-    );
-  }
-
-  String _formatDate(String iso) {
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inMinutes < 60) return '${diff.inMinutes} นาทีที่แล้ว';
-      if (diff.inHours < 24) return '${diff.inHours} ชม.ที่แล้ว';
-      return '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {
-      return '';
-    }
-  }
-}
-
-// ── Exercise card ─────────────────────────────────────────────────────────────
-
-class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({required this.workout});
-
-  final Workout workout;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    final diffColor = AppColors.difficultyColor(workout.difficulty);
-    final diffLabel = _diffLabel(workout.difficulty);
-
-    return AppCard(
-      onTap: () => context.push(
-        RouteNames.workoutSession,
-        extra: {
-          'exerciseId': workout.id,
-          'exerciseName': workout.name,
-          'targetSets': workout.defaultSets,
-          'targetReps': workout.defaultReps,
-        },
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Icon
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.12),
-              borderRadius: AppRadius.smAll,
-            ),
-            child: Icon(
-              _iconFor(workout.id),
-              color: AppColors.accent,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        workout.name,
-                        style: tt.titleSmall,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    _chip(diffLabel, diffColor),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${workout.defaultSets} sets × ${workout.defaultReps} reps',
-                  style: tt.bodySmall?.copyWith(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  children: workout.muscleGroupTags
-                      .take(3)
-                      .map((tag) => _chip(tag, AppColors.accentBlue))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-
-          // Action
-          const Icon(
-            Icons.play_circle_filled_rounded,
-            color: AppColors.accent,
-            size: 32,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: AppRadius.smAll,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  String _diffLabel(String d) => switch (d) {
-        'beginner' => 'มือใหม่',
-        'intermediate' => 'กลาง',
-        'advanced' => 'ขั้นสูง',
-        _ => d,
-      };
-
-  IconData _iconFor(String id) => switch (id) {
-        'squats' => Icons.accessibility_new_rounded,
-        'push_ups' => Icons.sports_gymnastics,
-        'deadlifts' => Icons.fitness_center,
-        'bicep_curls' => Icons.sports_martial_arts,
-        _ => Icons.directions_run_rounded,
-      };
 }
