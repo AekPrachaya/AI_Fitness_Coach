@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,8 +104,13 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       ResolutionPreset.medium,
       // Must match what PoseDetectionService decodes: BGRA on iOS,
       // YUV 420 on Android. bgra8888 is not supported by the Android camera.
-      imageFormatGroup:
-          Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
+      // dart:io Platform throws on web, and camera_web ignores this field
+      // anyway, so it is left null there.
+      imageFormatGroup: kIsWeb
+          ? null
+          : (defaultTargetPlatform == TargetPlatform.iOS
+              ? ImageFormatGroup.bgra8888
+              : ImageFormatGroup.yuv420),
       enableAudio: false,
     );
     await controller.initialize();
@@ -123,7 +127,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
   }
 
   /// Brings the image stream in line with [wanted]. Safe to call repeatedly.
+  ///
+  /// No-ops on web: camera_web has no startImageStream implementation, so the
+  /// preview shows but pose tracking never runs there.
   Future<void> _applyStreaming(bool wanted) async {
+    if (kIsWeb) return;
     final controller = _controller;
     if (controller == null ||
         !controller.value.isInitialized ||
