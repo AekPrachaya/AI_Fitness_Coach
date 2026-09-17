@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/providers/session_history_provider.dart';
 import '../../../core/providers/user_profile_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/exercise_analyzer.dart';
@@ -274,8 +275,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       ],
     });
 
-    // The home screen holds a cached read of the box.
-    ref.invalidate(recentSessionsProvider);
+    // Home and Progress both hold cached reads of the box.
+    ref.invalidate(sessionHistoryProvider);
   }
 
   @override

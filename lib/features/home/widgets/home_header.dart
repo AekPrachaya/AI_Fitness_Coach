@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import '../../../core/providers/session_history_provider.dart';
 import '../../../core/providers/user_profile_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/mock_data.dart';
 import '../../../shared/widgets/app_badge.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,39 +28,6 @@ String _formattedDate() {
   return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}';
 }
 
-int _getStreakCount() {
-  try {
-    final box = Hive.box(MockData.boxSessionHistory);
-    final sessions = box.get('sessions', defaultValue: []) as List;
-    if (sessions.isEmpty) return 0;
-
-    final dates = sessions
-        .map((s) => DateTime.parse((s as Map)['completed_at'] as String))
-        .map((d) => DateTime(d.year, d.month, d.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a)); // newest first
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    int streak = 0;
-    DateTime current = today;
-
-    for (final date in dates) {
-      if (date == current ||
-          date == current.subtract(const Duration(days: 1))) {
-        streak++;
-        current = date;
-      } else {
-        break;
-      }
-    }
-    return streak;
-  } catch (_) {
-    return 0;
-  }
-}
-
 // ── HomeHeader ────────────────────────────────────────────────────────────────
 
 class HomeHeader extends ConsumerWidget {
@@ -70,7 +36,7 @@ class HomeHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userName = ref.watch(userNameProvider);
-    final streakCount = _getStreakCount();
+    final streakCount = ref.watch(streakProvider).current;
     final tt = Theme.of(context).textTheme;
 
     return Padding(
