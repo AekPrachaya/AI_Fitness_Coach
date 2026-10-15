@@ -1,4 +1,5 @@
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'form_fault.dart';
 import 'analyzers/squat_analyzer.dart';
 import 'analyzers/push_up_analyzer.dart';
 import 'analyzers/deadlift_analyzer.dart';
@@ -10,24 +11,64 @@ class FormResult {
   const FormResult({
     required this.score,
     required this.feedback,
-    this.issues = const [],
+    this.faults = const [],
   });
 
   final FormScore score;
 
-  /// The line shown in the session HUD.
+  /// The single line shown in the session HUD: the cue for the most important
+  /// fault in [faults], or praise for a clean rep.
+  ///
+  /// One cue, never a list. A user mid-rep has about half a second of glance
+  /// to spend on the screen, and three stacked corrections in that time read
+  /// as noise — so the rest of [faults] waits its turn instead.
   final String feedback;
 
-  /// The individual faults behind [feedback], kept apart so a finished session
-  /// can tally them without re-splitting the display string. Empty for a clean
+  /// Every fault found in this frame, most important first. Empty for a clean
   /// rep and for [notEvaluated].
-  final List<String> issues;
+  final List<FormFault> faults;
+
+  /// The fault [feedback] is correcting, or null when there is nothing to fix.
+  FormFault? get topFault => faults.isEmpty ? null : faults.first;
+
+  /// True for a rep the analyzer graded and found nothing wrong with — as
+  /// opposed to [notEvaluated], which it never looked at.
+  bool get isClean => faults.isEmpty && feedback.isNotEmpty;
+
+  /// This frame's verdict with the faults it has no business judging removed.
+  ///
+  /// [FaultTiming.rangeOfMotion] faults survive only on the frame the movement
+  /// bottomed out. Every other frame of the rep they are dropped and what is
+  /// left is re-graded — so a user still on the way down, who the depth check
+  /// reads as shallow for as long as the descent lasts, simply comes back
+  /// clean.
+  ///
+  /// This also keeps the session tally honest: scored per frame, "ลงไม่ลึกพอ"
+  /// would be banked against every rep, deep ones included, purely because
+  /// every descent passes through the shallow range on its way down.
+  FormResult judgeableNow({required bool bottomedOut}) {
+    if (bottomedOut || faults.isEmpty) return this;
+    final keep = [
+      for (final f in faults)
+        if (f.timing == FaultTiming.posture) f,
+    ];
+    if (keep.length == faults.length) return this;
+    return ExerciseAnalyzer.verdict(keep);
+  }
+
+  /// Fault names for the session tally, most frequent-first ordering aside.
+  /// Labels rather than cues: a summary reads better naming the fault than
+  /// repeating an instruction the workout is already over for.
+  List<String> get issues => [for (final f in faults) f.label];
 
   /// Returned for a joint angle outside the range worth grading — standing
   /// between reps, say. Distinct from a graded-clean rep, which carries
   /// feedback, so session stats can ignore it.
   static const FormResult notEvaluated =
       FormResult(score: FormScore.good, feedback: '');
+
+  /// Shown for a rep with nothing to correct.
+  static const String praise = 'ท่าดีมาก!';
 }
 
 abstract class ExerciseAnalyzer {
@@ -70,16 +111,24 @@ abstract class ExerciseAnalyzer {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  /// Grades a rep from the faults found in it: none is good, one is fair,
-  /// more than one is poor.
-  static FormResult verdict(List<String> issues) {
-    if (issues.isEmpty) {
-      return const FormResult(score: FormScore.good, feedback: 'ท่าดีมาก!');
+  /// Grades a frame from the faults found in it and picks the one cue to show.
+  ///
+  /// Grading is by severity, not by count: one risky fault — a spine taking
+  /// load in a bad position — is worse than two sloppy-but-safe ones, so it
+  /// scores [FormScore.poor] on its own rather than waiting for company.
+  static FormResult verdict(List<FormFault> faults) {
+    if (faults.isEmpty) {
+      return const FormResult(
+        score: FormScore.good,
+        feedback: FormResult.praise,
+      );
     }
+    final ranked = [...faults]..sort(FormFault.byPriority);
+    final risky = ranked.any((f) => f.severity == FormSeverity.risky);
     return FormResult(
-      score: issues.length == 1 ? FormScore.fair : FormScore.poor,
-      feedback: issues.join(' · '),
-      issues: List.unmodifiable(issues),
+      score: risky || ranked.length > 1 ? FormScore.poor : FormScore.fair,
+      feedback: ranked.first.cue,
+      faults: List.unmodifiable(ranked),
     );
   }
 

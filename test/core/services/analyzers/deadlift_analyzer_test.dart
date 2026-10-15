@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/deadlift_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
+import 'package:ai_fitness_coach/core/services/form_fault.dart';
 
 import '../../../support/pose_fixtures.dart';
 
@@ -23,21 +24,24 @@ void main() {
   test('praises a hinge that keeps the torso neutral', () {
     final result = analyzer.analyze(hingePose(), 100);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 
-  test('flags a rounded back', () {
-    // Shoulder 100px ahead of the hip over a 100px torso — 45 degrees of tilt,
-    // past the 35 degree limit.
+  test('flags a torso folded nearly flat', () {
+    // Shoulder 400px ahead of the hip over a 100px torso — 76 degrees of
+    // tilt, past the 75 degree limit.
+    final result = analyzer.analyze(hingePose(shoulderX: 500), 100);
+    expect(result.score, FormScore.poor, reason: 'a loaded spine is risky');
+    expect(result.topFault, FormFault.deadliftTorsoDrop);
+    expect(result.feedback, FormFault.deadliftTorsoDrop.cue);
+  });
+
+  test('leaves an ordinary hinge alone', () {
+    // 100px over 100px is 45 degrees — a normal deadlift passes through this
+    // on every rep, and warning about it would make the alert worthless.
     final result = analyzer.analyze(hingePose(shoulderX: 200), 100);
-    expect(result.score, FormScore.fair);
-    expect(result.feedback, contains('หลังค่อม'));
-  });
-
-  test('tolerates a tilt just inside the limit', () {
-    // 30px over 100px is roughly 17 degrees.
-    final result = analyzer.analyze(hingePose(shoulderX: 130), 100);
     expect(result.score, FormScore.good);
+    expect(result.faults, isEmpty);
   });
 
   test('skips the back check when the torso is not tracked', () {
@@ -47,6 +51,6 @@ void main() {
     ]);
     final result = analyzer.analyze(pose, 100);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 }

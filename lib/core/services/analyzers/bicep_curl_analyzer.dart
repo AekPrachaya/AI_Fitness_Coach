@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../exercise_analyzer.dart';
+import '../form_fault.dart';
 
 class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override PoseLandmarkType get primaryA => PoseLandmarkType.leftShoulder;
@@ -32,7 +33,7 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
     }
 
     final lms = pose.landmarks;
-    final issues = <String>[];
+    final faults = <FormFault>[];
 
     final arm = ExerciseAnalyzer.bestSide(
       lms,
@@ -48,15 +49,17 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
       if (upperArmLen > 0) {
         // 1. Elbow drift
         final driftRatio = (elbow.x - shoulder.x).abs() / upperArmLen;
-        if (driftRatio > _elbowDriftMaxRatio) issues.add('ล็อกข้อศอกไว้ข้างลำตัว');
+        if (driftRatio > _elbowDriftMaxRatio) {
+          faults.add(FormFault.curlElbowDrift);
+        }
 
         // 2. Body sway
         _shoulderXAtCurlStart ??= shoulder.x;
         final swayRatio = (shoulder.x - _shoulderXAtCurlStart!).abs() / upperArmLen;
-        if (swayRatio > _bodySwayMaxRatio) issues.add('อย่าแกว่งตัว');
+        if (swayRatio > _bodySwayMaxRatio) faults.add(FormFault.curlBodySway);
       }
     }
 
-    return ExerciseAnalyzer.verdict(issues);
+    return ExerciseAnalyzer.verdict(faults);
   }
 }

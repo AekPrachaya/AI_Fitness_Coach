@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../exercise_analyzer.dart';
+import '../form_fault.dart';
 
 class SquatAnalyzer extends ExerciseAnalyzer {
   @override PoseLandmarkType get primaryA => PoseLandmarkType.leftHip;
@@ -27,10 +28,10 @@ class SquatAnalyzer extends ExerciseAnalyzer {
     }
 
     final lms = pose.landmarks;
-    final issues = <String>[];
+    final faults = <FormFault>[];
 
     // 1. Depth
-    if (angle > _depthThreshold) issues.add('ลงให้ลึกกว่านี้');
+    if (angle > _depthThreshold) faults.add(FormFault.squatShallow);
 
     // 2. Knee over toe
     final leg = ExerciseAnalyzer.bestSide(
@@ -42,7 +43,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       final dx = (knee.x - ankle.x).abs();
       final dy = (knee.y - ankle.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _shinForwardMax) {
-        issues.add('เข่าเกินนิ้วเท้ามากเกินไป');
+        faults.add(FormFault.squatKneeOverToe);
       }
     }
 
@@ -56,10 +57,10 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       final dx = (shoulder.x - hip.x).abs();
       final dy = (shoulder.y - hip.y).abs();
       if (dy > 0 && math.atan2(dx, dy) * 180 / math.pi > _torsoLeanMax) {
-        issues.add('หลังเอนไปข้างหน้ามากเกินไป');
+        faults.add(FormFault.squatTorsoLean);
       }
     }
 
-    return ExerciseAnalyzer.verdict(issues);
+    return ExerciseAnalyzer.verdict(faults);
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
+import 'package:ai_fitness_coach/core/services/form_fault.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/bicep_curl_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/deadlift_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/push_up_analyzer.dart';
@@ -37,35 +38,131 @@ void main() {
   });
 
   group('verdict', () {
-    test('a clean rep is good and carries no issues', () {
+    test('a clean rep is good and carries no faults', () {
       final result = ExerciseAnalyzer.verdict(const []);
       expect(result.score, FormScore.good);
-      expect(result.feedback, 'ท่าดีมาก!');
-      expect(result.issues, isEmpty);
+      expect(result.feedback, FormResult.praise);
+      expect(result.faults, isEmpty);
+      expect(result.isClean, isTrue);
     });
 
-    test('one fault is fair and keeps the fault for tallying', () {
-      final result = ExerciseAnalyzer.verdict(['เข่าเกินนิ้วเท้า']);
+    test('one minor fault is fair and shows its cue', () {
+      final result = ExerciseAnalyzer.verdict([FormFault.squatShallow]);
       expect(result.score, FormScore.fair);
-      expect(result.feedback, 'เข่าเกินนิ้วเท้า');
-      expect(result.issues, ['เข่าเกินนิ้วเท้า']);
+      expect(result.feedback, FormFault.squatShallow.cue);
+      expect(result.topFault, FormFault.squatShallow);
     });
 
-    test('several faults are poor and stay separable', () {
-      final result = ExerciseAnalyzer.verdict(['หลังค่อม', 'ลงไม่ลึก']);
+    test('one risky fault is poor without needing company', () {
+      // Severity, not arithmetic: a spine loaded in a bad position is the
+      // worst thing in a set even if it is the only thing wrong with it.
+      final result = ExerciseAnalyzer.verdict([FormFault.squatTorsoLean]);
       expect(result.score, FormScore.poor);
-      expect(result.feedback, 'หลังค่อม · ลงไม่ลึก');
-      expect(result.issues, ['หลังค่อม', 'ลงไม่ลึก']);
     });
 
-    test('the returned issue list cannot be mutated by a caller', () {
-      final result = ExerciseAnalyzer.verdict(['a', 'b']);
-      expect(() => result.issues.add('c'), throwsUnsupportedError);
+    test('several faults are poor and stay separable for the tally', () {
+      final result = ExerciseAnalyzer.verdict(
+        [FormFault.squatShallow, FormFault.squatKneeOverToe],
+      );
+      expect(result.score, FormScore.poor);
+      expect(result.faults, hasLength(2));
+      expect(result.issues, [
+        FormFault.squatKneeOverToe.label,
+        FormFault.squatShallow.label,
+      ]);
+    });
+
+    test('shows only the most important cue, never a list of them', () {
+      // Three corrections at once is noise to someone halfway through a rep.
+      final result = ExerciseAnalyzer.verdict([
+        FormFault.squatShallow,
+        FormFault.squatKneeOverToe,
+        FormFault.squatTorsoLean,
+      ]);
+      expect(result.feedback, FormFault.squatTorsoLean.cue);
+      expect(result.feedback, isNot(contains('·')));
+    });
+
+    test('ranks the faults however they arrive', () {
+      final result = ExerciseAnalyzer.verdict(
+        [FormFault.squatShallow, FormFault.squatTorsoLean],
+      );
+      expect(result.topFault, FormFault.squatTorsoLean);
+    });
+
+    test('the returned fault list cannot be mutated by a caller', () {
+      final result = ExerciseAnalyzer.verdict([FormFault.squatShallow]);
+      expect(() => result.faults.add(FormFault.squatTorsoLean),
+          throwsUnsupportedError);
     });
 
     test('notEvaluated is distinguishable from a graded-clean rep', () {
       expect(FormResult.notEvaluated.feedback, isEmpty);
-      expect(ExerciseAnalyzer.verdict(const []).feedback, isNotEmpty);
+      expect(FormResult.notEvaluated.isClean, isFalse);
+      expect(ExerciseAnalyzer.verdict(const []).isClean, isTrue);
+    });
+  });
+
+  group('judgeableNow', () {
+    // The bug this exists for: the depth check reads a knee at 110° as
+    // shallow, which is true at the top of a rep and nonsense halfway down
+    // one. The user was being corrected for not having gone deep yet while
+    // still on their way down, and again on the way up when the rep was
+    // already over and nothing could be done about it.
+    test('hides a depth fault anywhere but the bottom of the rep', () {
+      final descending = ExerciseAnalyzer.verdict([FormFault.squatShallow])
+          .judgeableNow(bottomedOut: false);
+      expect(descending.faults, isEmpty);
+      expect(descending.isClean, isTrue,
+          reason: 'mid-descent is not a fault, it is a descent');
+    });
+
+    test('reports a depth fault at the turnaround', () {
+      final bottom = ExerciseAnalyzer.verdict([FormFault.squatShallow])
+          .judgeableNow(bottomedOut: true);
+      expect(bottom.topFault, FormFault.squatShallow);
+      expect(bottom.feedback, FormFault.squatShallow.cue);
+    });
+
+    test('posture faults are judged on every frame of the rep', () {
+      // A rounded back is wrong while it is rounded, whichever way the user
+      // happens to be moving.
+      for (final bottomedOut in [true, false]) {
+        final result = ExerciseAnalyzer.verdict([FormFault.squatTorsoLean])
+            .judgeableNow(bottomedOut: bottomedOut);
+        expect(result.topFault, FormFault.squatTorsoLean,
+            reason: 'bottomedOut: $bottomedOut');
+      }
+    });
+
+    test('re-grades what survives instead of keeping a stale score', () {
+      // Depth plus a lean scores poor for having two faults. Drop the depth
+      // and a single minor fault is left — which is fair, not poor.
+      final mixed = ExerciseAnalyzer.verdict(
+        [FormFault.squatShallow, FormFault.curlElbowDrift],
+      );
+      expect(mixed.score, FormScore.poor);
+
+      final descending = mixed.judgeableNow(bottomedOut: false);
+      expect(descending.faults, [FormFault.curlElbowDrift]);
+      expect(descending.score, FormScore.fair);
+      expect(descending.feedback, FormFault.curlElbowDrift.cue);
+    });
+
+    test('leaves an all-posture verdict untouched', () {
+      final posture = ExerciseAnalyzer.verdict(
+        [FormFault.squatTorsoLean, FormFault.squatKneeOverToe],
+      );
+      expect(posture.judgeableNow(bottomedOut: false), same(posture));
+    });
+
+    test('leaves a clean frame and an ungraded one alone', () {
+      final clean = ExerciseAnalyzer.verdict(const []);
+      expect(clean.judgeableNow(bottomedOut: false), same(clean));
+      expect(
+        FormResult.notEvaluated.judgeableNow(bottomedOut: false).feedback,
+        isEmpty,
+      );
     });
   });
 

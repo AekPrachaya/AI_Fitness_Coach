@@ -42,5 +42,13 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- Required for the spoken form coach: from Android 11 on, an app
+             cannot see the device's text-to-speech engine unless it declares
+             the intent here. Without it TextToSpeech finds no engine at all
+             and the coach is silent, with no error to go on. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
     </queries>
 </manifest>

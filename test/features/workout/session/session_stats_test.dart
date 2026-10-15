@@ -1,13 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
+import 'package:ai_fitness_coach/core/services/form_fault.dart';
 import 'package:ai_fitness_coach/features/workout/session/session_stats.dart';
 
 void main() {
   late SessionStats stats;
   setUp(() => stats = SessionStats());
 
+  // Two minor faults and one risky one: minor faults grade a rep fair on
+  // their own, which is what most of these cases need to tell 70 from 40.
+  const depth = FormFault.squatShallow;
+  const elbow = FormFault.curlElbowDrift;
+  const risky = FormFault.squatTorsoLean;
+
   FormResult clean() => ExerciseAnalyzer.verdict(const []);
-  FormResult withIssues(List<String> issues) => ExerciseAnalyzer.verdict(issues);
+  FormResult withFaults(List<FormFault> faults) =>
+      ExerciseAnalyzer.verdict(faults);
 
   /// Feeds [frames] into one rep and closes it.
   void rep(List<FormResult> frames) {
@@ -47,66 +55,71 @@ void main() {
   test('a rep keeps its worst frame, not its last', () {
     // The user dips into a poor position mid-rep then recovers; the rep is
     // still a poor one.
-    rep([clean(), withIssues(['a', 'b']), clean()]);
+    rep([clean(), withFaults([depth, elbow]), clean()]);
     expect(stats.gradedReps, 1);
     expect(stats.avgFormScore, 40);
   });
 
-  test('one fault grades a rep fair, several grade it poor', () {
-    rep([withIssues(['a'])]);
+  test('one minor fault grades a rep fair, several grade it poor', () {
+    rep([withFaults([depth])]);
     expect(stats.avgFormScore, 70);
 
-    rep([withIssues(['a', 'b'])]);
+    rep([withFaults([depth, elbow])]);
     expect(stats.avgFormScore, 55, reason: 'mean of 70 and 40');
+  });
+
+  test('a single risky fault drags a rep down on its own', () {
+    rep([withFaults([risky])]);
+    expect(stats.avgFormScore, 40);
   });
 
   test('averages across reps and rounds to one decimal', () {
     rep([clean()]); // 100
-    rep([withIssues(['a'])]); // 70
-    rep([withIssues(['a'])]); // 70
+    rep([withFaults([depth])]); // 70
+    rep([withFaults([depth])]); // 70
     expect(stats.gradedReps, 3);
     expect(stats.avgFormScore, 80);
   });
 
   test('a fault repeated within one rep counts once for that rep', () {
     rep([
-      withIssues(['knees']),
-      withIssues(['knees']),
-      withIssues(['knees']),
+      withFaults([depth]),
+      withFaults([depth]),
+      withFaults([depth]),
     ]);
-    expect(stats.errorCounts, {'knees': 1});
+    expect(stats.errorCounts, {depth.label: 1});
   });
 
   test('counts how many reps each fault appeared in', () {
-    rep([withIssues(['knees'])]);
-    rep([withIssues(['knees', 'back'])]);
-    rep([withIssues(['back'])]);
-    rep([withIssues(['back'])]);
-    expect(stats.errorCounts, {'back': 3, 'knees': 2});
-    expect(stats.mostCommonError, 'back');
+    rep([withFaults([depth])]);
+    rep([withFaults([depth, elbow])]);
+    rep([withFaults([elbow])]);
+    rep([withFaults([elbow])]);
+    expect(stats.errorCounts, {elbow.label: 3, depth.label: 2});
+    expect(stats.mostCommonError, elbow.label);
   });
 
   test('errorCounts is ordered most frequent first and is unmodifiable', () {
-    rep([withIssues(['rare'])]);
-    rep([withIssues(['common'])]);
-    rep([withIssues(['common'])]);
-    expect(stats.errorCounts.keys.first, 'common');
+    rep([withFaults([depth])]);
+    rep([withFaults([elbow])]);
+    rep([withFaults([elbow])]);
+    expect(stats.errorCounts.keys.first, elbow.label);
     expect(() => stats.errorCounts['x'] = 1, throwsUnsupportedError);
   });
 
   test('faults seen in an uncommitted rep are not banked yet', () {
-    stats.observe(withIssues(['knees']));
+    stats.observe(withFaults([depth]));
     expect(stats.gradedReps, 0);
     expect(stats.mostCommonError, isEmpty);
 
     stats.commitRep();
-    expect(stats.mostCommonError, 'knees');
+    expect(stats.mostCommonError, depth.label);
   });
 
   test('committing a rep resets the buffer for the next one', () {
-    rep([withIssues(['knees'])]);
+    rep([withFaults([depth])]);
     rep([clean()]);
-    expect(stats.errorCounts, {'knees': 1});
+    expect(stats.errorCounts, {depth.label: 1});
     expect(stats.avgFormScore, 85, reason: 'mean of 70 and 100');
   });
 

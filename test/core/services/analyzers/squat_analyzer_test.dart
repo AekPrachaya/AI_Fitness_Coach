@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/squat_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
+import 'package:ai_fitness_coach/core/services/form_fault.dart';
 
 import '../../../support/pose_fixtures.dart';
 
@@ -33,40 +34,47 @@ void main() {
   test('praises a deep squat with a vertical shin and torso', () {
     final result = analyzer.analyze(stackedPose(), 85);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 
   test('flags insufficient depth on its own as fair', () {
     final result = analyzer.analyze(stackedPose(), 110);
     expect(result.score, FormScore.fair);
-    expect(result.feedback, 'ลงให้ลึกกว่านี้');
+    expect(result.topFault, FormFault.squatShallow);
+    expect(result.feedback, FormFault.squatShallow.cue);
   });
 
   test('flags the knee travelling past the toes', () {
     // Knee 100px in front of the ankle over a 100px shin — a 45 degree shin,
     // past the 40 degree limit.
     final result = analyzer.analyze(stackedPose(kneeX: 200), 85);
-    expect(result.score, FormScore.fair);
-    expect(result.feedback, contains('เข่าเกินนิ้วเท้า'));
+    expect(result.topFault, FormFault.squatKneeOverToe);
+    expect(result.feedback, FormFault.squatKneeOverToe.cue);
   });
 
   test('flags an over-folded torso', () {
     // Shoulder 200px ahead of the hip over a 100px torso — about 63 degrees,
     // past the 55 degree limit.
     final result = analyzer.analyze(stackedPose(shoulderX: 300), 85);
-    expect(result.score, FormScore.fair);
-    expect(result.feedback, contains('หลังเอนไปข้างหน้า'));
+    expect(result.topFault, FormFault.squatTorsoLean);
+    expect(result.feedback, FormFault.squatTorsoLean.cue);
   });
 
-  test('scores poor and lists every issue when faults stack up', () {
+  test('keeps every fault when they stack up but coaches the worst one', () {
     final result = analyzer.analyze(
       stackedPose(kneeX: 200, shoulderX: 300),
       110,
     );
     expect(result.score, FormScore.poor);
-    expect(result.feedback, contains('ลงให้ลึกกว่านี้'));
-    expect(result.feedback, contains('เข่าเกินนิ้วเท้า'));
-    expect(result.feedback, contains('หลังเอนไปข้างหน้า'));
+    expect(
+      result.faults,
+      containsAll([
+        FormFault.squatShallow,
+        FormFault.squatKneeOverToe,
+        FormFault.squatTorsoLean,
+      ]),
+    );
+    expect(result.feedback, FormFault.squatTorsoLean.cue);
   });
 
   test('skips the geometry checks when the body is not confidently tracked', () {
@@ -80,7 +88,7 @@ void main() {
     // not fire on untrustworthy points.
     final result = analyzer.analyze(pose, 85);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 
   test('exposes the rep thresholds the counter is built from', () {

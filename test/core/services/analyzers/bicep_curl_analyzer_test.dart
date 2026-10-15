@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/bicep_curl_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
+import 'package:ai_fitness_coach/core/services/form_fault.dart';
 
 import '../../../support/pose_fixtures.dart';
 
@@ -25,7 +26,7 @@ void main() {
   test('praises a curl with the elbow pinned to the body', () {
     final result = analyzer.analyze(armPose(), 60);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 
   test('flags the elbow drifting away from the torso', () {
@@ -33,7 +34,8 @@ void main() {
     // limit.
     final result = analyzer.analyze(armPose(elbowX: 140), 60);
     expect(result.score, FormScore.fair);
-    expect(result.feedback, contains('ล็อกข้อศอก'));
+    expect(result.topFault, FormFault.curlElbowDrift);
+    expect(result.feedback, FormFault.curlElbowDrift.cue);
   });
 
   test('flags body sway relative to where the curl started', () {
@@ -42,12 +44,13 @@ void main() {
     analyzer.analyze(armPose(), 60);
     final result = analyzer.analyze(armPose(shoulderX: 120, elbowX: 120), 60);
     expect(result.score, FormScore.fair);
-    expect(result.feedback, contains('อย่าแกว่งตัว'));
+    expect(result.topFault, FormFault.curlBodySway);
+    expect(result.feedback, FormFault.curlBodySway.cue);
   });
 
   test('does not report sway on the very first frame of a curl', () {
     final result = analyzer.analyze(armPose(shoulderX: 250, elbowX: 250), 60);
-    expect(result.feedback, isNot(contains('อย่าแกว่งตัว')));
+    expect(result.faults, isNot(contains(FormFault.curlBodySway)));
   });
 
   test('re-anchors the sway reference once the arm extends again', () {
@@ -55,15 +58,15 @@ void main() {
     analyzer.analyze(armPose(), 160); // arm extended — anchor is dropped
     // A new curl starting from x=120 is not "sway" relative to the old rep.
     final result = analyzer.analyze(armPose(shoulderX: 120, elbowX: 120), 60);
-    expect(result.feedback, isNot(contains('อย่าแกว่งตัว')));
+    expect(result.faults, isNot(contains(FormFault.curlBodySway)));
   });
 
   test('scores poor when the elbow drifts and the body swings', () {
     analyzer.analyze(armPose(), 60);
     final result = analyzer.analyze(armPose(shoulderX: 120, elbowX: 165), 60);
     expect(result.score, FormScore.poor);
-    expect(result.feedback, contains('ล็อกข้อศอก'));
-    expect(result.feedback, contains('อย่าแกว่งตัว'));
+    expect(result.faults,
+        containsAll([FormFault.curlElbowDrift, FormFault.curlBodySway]));
   });
 
   test('skips the checks when the arm is not confidently tracked', () {
@@ -73,6 +76,6 @@ void main() {
     ]);
     final result = analyzer.analyze(pose, 60);
     expect(result.score, FormScore.good);
-    expect(result.feedback, 'ท่าดีมาก!');
+    expect(result.feedback, FormResult.praise);
   });
 }

@@ -12,8 +12,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/workout_repository.dart';
 import 'session_stats.dart';
+import 'widgets/form_cue_banner.dart';
 import 'widgets/pose_overlay_painter.dart';
 import 'widgets/rest_overlay.dart';
+import 'widgets/session_interrupted_overlay.dart';
 import 'widgets/set_complete_overlay.dart';
 import 'widgets/tracking_error_overlay.dart';
 import 'workout_session_notifier.dart';
@@ -50,6 +52,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
   int _cameraIndex = 0;
   bool _isSwitching = false;
   bool _isStreaming = false;
+
+  /// True once the session has had a working camera, so a null controller
+  /// afterwards means "taken away and coming back", not "still starting up".
+  bool _cameraWasReady = false;
+
+  /// Set when reopening the camera after an interruption failed outright and
+  /// the user has to be offered a retry.
+  bool _cameraFailed = false;
 
   /// Camera work is serialised through this chain: start, stop, switch and the
   /// lifecycle teardown all throw if they interleave on the same controller.
@@ -115,7 +125,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       return;
     }
     _isStreaming = false;
-    setState(() => _controller = controller);
+    _cameraWasReady = true;
+    setState(() {
+      _controller = controller;
+      _cameraFailed = false;
+    });
 
     await _applyStreaming(_wantsFrames(
       ref.read(workoutSessionNotifierProvider(widget.exerciseId)).status,
@@ -169,10 +183,40 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     await controller.dispose();
   }
 
+  /// How many times reopening the camera is attempted before the user is
+  /// asked to retry by hand, and how long to wait between tries.
+  ///
+  /// iOS does not always hand the capture device back the instant the app is
+  /// foregrounded again — right after a call ends, the first `initialize()`
+  /// can still fail. One immediate try plus a couple of spaced retries covers
+  /// that without leaving the session stuck on a spinner forever, which is
+  /// what a single silent attempt used to do.
+  static const _cameraRetries = 3;
+  static const _cameraRetryDelay = Duration(milliseconds: 600);
+
   /// Restores the camera after the app comes back to the foreground.
   Future<void> _ensureCamera() async {
     if (!mounted || _controller != null || _cameras.isEmpty) return;
-    await _startCamera(_cameraIndex);
+
+    for (var attempt = 1; attempt <= _cameraRetries; attempt++) {
+      if (!mounted) return;
+      try {
+        await _startCamera(_cameraIndex);
+        return;
+      } catch (e) {
+        debugPrint('WorkoutSessionScreen camera restore $attempt failed: $e');
+        if (attempt < _cameraRetries) {
+          await Future.delayed(_cameraRetryDelay);
+        }
+      }
+    }
+    if (mounted) setState(() => _cameraFailed = true);
+  }
+
+  /// Retries the camera from the overlay's button.
+  void _retryCamera() {
+    setState(() => _cameraFailed = false);
+    _enqueue(_ensureCamera);
   }
 
   /// Disables the button straight away, then queues the switch behind any
@@ -297,8 +341,29 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       },
     );
 
-    if (controller == null ||
-        !controller.value.isInitialized ||
+    final hasPreview = controller != null && controller.value.isInitialized;
+
+    // The camera was working and is now gone: the OS reclaimed it for a call
+    // or another app. This is a recoverable interruption, and it has to say so
+    // and offer a way forward — rendering the bare spinner below would hide
+    // the pause button and every other control with it.
+    //
+    // A deliberate flip passes through the same gap, and must not be dressed
+    // up as an interruption on its way through.
+    if (!hasPreview && _cameraWasReady && !_isSwitching) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: SessionInterruptedOverlay(
+          kind: _cameraFailed
+              ? SessionInterruption.cameraFailed
+              : SessionInterruption.reconnecting,
+          onAction: _cameraFailed ? _retryCamera : null,
+        ),
+      );
+    }
+
+    // Genuine cold start — nothing to control yet.
+    if (!hasPreview ||
         session.status == SessionStatus.idle ||
         session.status == SessionStatus.initializing) {
       return const Scaffold(
@@ -336,15 +401,15 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
             child: _buildTopBar(context, session, notifier),
           ),
 
-          if (session.formResult != null &&
-              session.formResult!.feedback.isNotEmpty &&
-              session.status == SessionStatus.tracking)
+          if (session.cue != null &&
+              (session.status == SessionStatus.tracking ||
+                  session.status == SessionStatus.repComplete))
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
               bottom:
                   MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
-              child: _buildFormBanner(context, session),
+              child: FormCueBanner(cue: session.cue!),
             ),
 
           if (session.status != SessionStatus.resting)
@@ -358,6 +423,15 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
           if (session.status == SessionStatus.error &&
               session.errorMessage != null)
             TrackingErrorOverlay(message: session.errorMessage!),
+
+          // A session paused by an interruption needs more than the small
+          // top-bar toggle: the user has just come back to the app and has to
+          // be told, in one place, that nothing is being counted yet.
+          if (session.status == SessionStatus.paused)
+            SessionInterruptedOverlay(
+              kind: SessionInterruption.paused,
+              onAction: notifier.resume,
+            ),
 
           if (session.status == SessionStatus.setComplete)
             SetCompleteOverlay(
@@ -444,47 +518,6 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
             onPressed: session.status == SessionStatus.paused
                 ? notifier.resume
                 : notifier.pause,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFormBanner(BuildContext context, WorkoutSessionState session) {
-    final result = session.formResult!;
-    final color = switch (result.score) {
-      FormScore.good => AppColors.scoreGood,
-      FormScore.fair => AppColors.scoreOk,
-      FormScore.poor => AppColors.scorePoor,
-    };
-    final icon = switch (result.score) {
-      FormScore.good => Icons.check_circle_rounded,
-      FormScore.fair => Icons.warning_amber_rounded,
-      FormScore.poor => Icons.cancel_rounded,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: AppSpacing.sm),
-          Flexible(
-            child: Text(
-              result.feedback,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
           ),
         ],
       ),
