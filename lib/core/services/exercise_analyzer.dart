@@ -97,6 +97,15 @@ abstract class ExerciseAnalyzer {
   /// These are starting points and want tuning against real footage.
   double get hysteresis => 8.0;
 
+  /// Whether this exercise's checks are only meaningful from a side view.
+  ///
+  /// True for anything whose measurements are horizontal distances in the
+  /// image standing in for forward travel — a torso leaning, a knee passing
+  /// the toes, a hip off the plank line, and the joint angles themselves,
+  /// which all bend in the sagittal plane. Face-on, those collapse toward
+  /// zero and the exercise reads as flawless however it is performed.
+  bool get needsSideView => true;
+
   FormResult analyze(Pose pose, double angle);
 
   // ── Factory ───────────────────────────────────────────────────────────────

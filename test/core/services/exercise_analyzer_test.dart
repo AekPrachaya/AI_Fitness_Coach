@@ -190,6 +190,25 @@ void main() {
       });
     });
 
+    test('only the bicep curl survives a camera square to the user', () {
+      // The other three measure forward travel as horizontal distance in the
+      // image, which collapses toward zero face-on — so they would find
+      // nothing wrong with any position at all. Both curl checks read the
+      // same either way, and demanding a side view there would cost the user
+      // more than it buys.
+      expect(
+        {
+          for (final e in analyzers.entries) e.key: e.value.needsSideView,
+        },
+        {
+          'squats': true,
+          'push_ups': true,
+          'deadlifts': true,
+          'bicep_curls': false,
+        },
+      );
+    });
+
     test('every exercise carries a plausible MET and a label', () {
       analyzers.forEach((id, a) {
         expect(a.met, inExclusiveRange(1, 20), reason: id);

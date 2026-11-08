@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../../../core/services/body_view.dart';
 import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/form_alerts.dart';
 import '../../../core/services/form_coach.dart';
@@ -157,6 +158,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final _stats = SessionStats();
   final _clock = SessionClock();
   final _watchdog = TrackingWatchdog();
+
+  /// Torso length last seen at the top of the movement, for [BodyView].
+  double? _standingTorso;
   late final RepCounter _repCounter;
   Timer? _restTimer;
 
@@ -224,13 +228,38 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       [_analyzer.altA, _analyzer.altB, _analyzer.altC],
     );
 
-    _applyTracking(joints == null ? TrackingLoss.lowConfidence : null);
-    if (joints == null) _coachOn(FormResult.notEvaluated);
+    // A camera square to the user defeats every horizontal measurement the
+    // form checks are built on, so it is reported before a confidence problem:
+    // the tracking is fine, the camera is in the wrong place, and that is the
+    // advice the user can act on.
+    // The top of the movement is the one moment the trunk is upright and its
+    // full length is on show; remember it so the bottom of the rep is not
+    // mistaken for a turn toward the camera.
+    if (joints case [final a, final b, final c]
+        when calculateAngle(a, b, c) > _analyzer.upThreshold) {
+      _standingTorso = BodyView.torsoLength(lms) ?? _standingTorso;
+    }
+
+    final TrackingLoss? loss;
+    if (_analyzer.needsSideView &&
+        BodyView.of(lms, standingTorso: _standingTorso) == ViewAngle.front) {
+      loss = TrackingLoss.notSideOn;
+    } else if (joints == null) {
+      loss = TrackingLoss.lowConfidence;
+    } else {
+      loss = null;
+    }
+
+    _applyTracking(loss);
+    if (loss != null) _coachOn(FormResult.notEvaluated);
 
     double? angle;
     FormResult? form;
 
-    if (joints case [final a, final b, final c]) {
+    // Nothing is graded through a loss. Reps are not counted either: an angle
+    // measured from the wrong side is not a smaller truth, it is a different
+    // number, and counting reps off it would inflate the session.
+    if (joints case [final a, final b, final c] when loss == null) {
       if (state.status != SessionStatus.tracking) return;
       angle = calculateAngle(a, b, c);
       _movement.update(angle);
@@ -295,6 +324,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final sustained = _watchdog.observe(loss);
 
     if (sustained != null && state.status == SessionStatus.tracking) {
+      // Whatever the user was in the middle of, it is not finishable now.
+      _repCounter.abandonRep();
       state = state.copyWith(
         status: SessionStatus.error,
         errorMessage: _messageFor(sustained),
@@ -310,6 +341,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         TrackingLoss.noBody => 'ไม่เห็นตัวคุณ — ถอยห่างให้กล้องเห็นทั้งตัว',
         TrackingLoss.lowConfidence =>
           'มองข้อต่อไม่ชัด — ลองเพิ่มแสงหรือปรับมุมกล้อง',
+        TrackingLoss.notSideOn =>
+          'ตรวจท่าจากด้านหน้าไม่ได้ — ย้ายกล้องไปด้านข้างลำตัว',
       };
 
   void pause() {
@@ -317,6 +350,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         state.status == SessionStatus.repComplete ||
         state.status == SessionStatus.error) {
       _clock.pause();
+      _repCounter.abandonRep();
       _coach.reset();
       _movement.reset();
       _alerts.silence();

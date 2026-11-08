@@ -33,6 +33,21 @@ class RepCounter {
     }
   }
 
+  /// Throws away the rep in progress, keeping the tally.
+  ///
+  /// A rep is only counted on the way back up, so a half-finished one leaves
+  /// the counter waiting for an angle above [upThreshold] — and anything that
+  /// interrupts the session mid-rep hands it exactly that. Squat down, take a
+  /// phone call, come back standing, and the first frame of the recovery
+  /// completes a rep nobody performed, banking a form grade with it.
+  ///
+  /// Only for an interruption the user has actually noticed: a loss that has
+  /// outlasted the tracking grace period, or a pause. Abandoning on every
+  /// dropped frame would be the worse bug, because detection drops constantly
+  /// — a hand crossing a knee is enough — and legitimate reps would stop
+  /// counting.
+  void abandonRep() => _phase = _RepPhase.waitingDown;
+
   void reset() {
     _count = 0;
     _phase = _RepPhase.waitingDown;

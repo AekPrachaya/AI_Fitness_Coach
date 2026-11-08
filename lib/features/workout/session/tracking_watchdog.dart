@@ -6,6 +6,12 @@ enum TrackingLoss {
   /// A body is there, but the joints being measured are not confident enough
   /// to trust. Usually poor lighting, or the joint is hidden behind something.
   lowConfidence,
+
+  /// The body is tracked well, but square to the camera rather than side-on,
+  /// which is the one arrangement the form checks cannot read. Kept separate
+  /// from [lowConfidence] because nothing is wrong with the tracking and the
+  /// advice is completely different: move the camera, not the lights.
+  notSideOn,
 }
 
 /// Decides when a run of unusable frames has lasted long enough to tell the

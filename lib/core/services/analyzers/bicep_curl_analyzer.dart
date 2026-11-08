@@ -15,6 +15,16 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override double get upThreshold   => 150.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
   @override double get met         => 3.5; // isolated arm work, light effort
+
+  /// The exception among the four: both curl checks survive a front view.
+  ///
+  /// Elbow drift is measured sideways from the shoulder, which catches the
+  /// elbow flaring out when seen from the front and drifting forward when
+  /// seen from the side — both of them faults. Body sway is a rock from side
+  /// to side, equally visible either way. The elbow angle itself is cleanest
+  /// in profile but still closes plainly face-on, so demanding a side view
+  /// would cost the user more than it buys.
+  @override bool get needsSideView => false;
   @override double get hysteresis  => 10.0; // fast movement over a wide range; swings jitter
 
   static const _analyzeThreshold = 120.0;
