@@ -3,6 +3,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:ai_fitness_coach/core/services/analyzers/squat_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/form_fault.dart';
+import 'package:ai_fitness_coach/core/services/rep_counter.dart';
 
 import '../../../support/pose_fixtures.dart';
 
@@ -94,5 +95,35 @@ void main() {
   test('exposes the rep thresholds the counter is built from', () {
     expect(analyzer.downThreshold, lessThan(analyzer.upThreshold));
     expect(analyzer.angleLabel, isNotEmpty);
+  });
+
+  group('rep thresholds against recorded footage', () {
+    RepCounter counterFor(SquatAnalyzer a) => RepCounter(
+          downThreshold: a.downThreshold,
+          upThreshold: a.upThreshold,
+          hysteresis: a.hysteresis,
+        );
+
+    test('counts a thighs-parallel squat that bottoms out near 98 degrees', () {
+      // Knee angle of one real rep filmed side-on, every 4th frame at 30 fps.
+      // The old 100° threshold needed the angle below 92 and missed it.
+      const trace = [
+        177, 177, 176, 174, 171, 165, 153, 144, 131, 124, 114, 105, 101, 98,
+        100, 102, 102, 109, 118, 138, 165, 177, 179, 180, 180, 179, 179, 177,
+      ];
+      final counter = counterFor(analyzer);
+      for (final angle in trace) {
+        counter.update(angle.toDouble());
+      }
+      expect(counter.count, 1);
+    });
+
+    test('does not count a shallow dip', () {
+      final counter = counterFor(analyzer);
+      for (final angle in [175, 160, 140, 125, 140, 160, 175]) {
+        counter.update(angle.toDouble());
+      }
+      expect(counter.count, 0);
+    });
   });
 }

@@ -11,7 +11,10 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   @override PoseLandmarkType get altB     => PoseLandmarkType.rightKnee;
   @override PoseLandmarkType get altC     => PoseLandmarkType.rightAnkle;
 
-  @override double get downThreshold => 100.0;
+  // A thighs-parallel squat filmed side-on bottoms out at 98–105° in 2D, so
+  // 100 (92 after hysteresis) missed most real reps: 41.9% → 79.0% on 62
+  // recorded reps. Depth is still graded separately by _depthThreshold.
+  @override double get downThreshold => 125.0;
   @override double get upThreshold   => 160.0;
   @override String get angleLabel    => 'เข่า (องศา)';
   @override double get met         => 5.0; // bodyweight squats, vigorous effort
