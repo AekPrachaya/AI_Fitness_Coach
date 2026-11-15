@@ -33,7 +33,12 @@ abstract class RouteNames {
   static String workoutDetailPath(String id)  => '/workout/$id';
   static String preWorkoutPath(String id)     => '/workout/$id/pre';
   static String sessionPath(String id)        => '/workout/$id/session';
-  static String workoutSummaryPath(String id) => '/workout/$id/summary';
+  /// Without [sessionId] the summary shows the newest session for [id];
+  /// with one (a replay from History) it shows that exact session.
+  static String workoutSummaryPath(String id, {String? sessionId}) =>
+      sessionId == null
+          ? '/workout/$id/summary'
+          : '/workout/$id/summary?session=${Uri.encodeQueryComponent(sessionId)}';
 }
 
 /// Development-only screens. Kept apart from [RouteNames] so it stays obvious

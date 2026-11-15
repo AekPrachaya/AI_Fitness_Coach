@@ -48,4 +48,17 @@ void main() {
       expect(path.trim(), path, reason: 'stray whitespace in "$path"');
     }
   });
+
+  group('workoutSummaryPath', () {
+    test('without a session id points at the plain summary route', () {
+      expect(RouteNames.workoutSummaryPath('squats'), '/workout/squats/summary');
+    });
+
+    test('with a session id adds it as a query parameter', () {
+      final path = RouteNames.workoutSummaryPath('squats', sessionId: 'a b&c');
+      final uri = Uri.parse(path);
+      expect(uri.path, '/workout/squats/summary');
+      expect(uri.queryParameters['session'], 'a b&c');
+    });
+  });
 }
