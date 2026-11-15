@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../exercise_analyzer.dart';
+import '../form_fault.dart';
 
 class PushUpAnalyzer extends ExerciseAnalyzer {
   @override PoseLandmarkType get primaryA => PoseLandmarkType.leftShoulder;
@@ -27,9 +28,9 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
     }
 
     final lms = pose.landmarks;
-    final issues = <String>[];
+    final faults = <FormFault>[];
 
-    // 1. Plank alignment — shoulder, hip, knee should be in a straight line
+    // 1. Plank alignment — shoulder, hip and knee should be in a straight line
     final chain = ExerciseAnalyzer.bestSide(
       lms,
       const [
@@ -44,14 +45,41 @@ class PushUpAnalyzer extends ExerciseAnalyzer {
       ],
     );
     if (chain case [final shoulder, final hip, final knee]) {
-      final plankAngle = _angleDeg(shoulder, hip, knee);
-      if (plankAngle < _plankMinAngle) issues.add('หลังแอ่น หรือสะโพกหย่อน');
+      if (_angleDeg(shoulder, hip, knee) < _plankMinAngle) {
+        final broken = _hipBreak(shoulder, hip, knee);
+        if (broken != null) faults.add(broken);
+      }
     }
 
     // 2. Depth — elbow must reach below 90°
-    if (angle > _depthThreshold) issues.add('ลงให้ถึงกว่านี้');
+    if (angle > _depthThreshold) faults.add(FormFault.pushUpShallow);
 
-    return ExerciseAnalyzer.verdict(issues);
+    return ExerciseAnalyzer.verdict(faults);
+  }
+
+  /// Which way a broken plank is broken.
+  ///
+  /// The shoulder-hip-knee angle says the line is bent but not which way, and
+  /// the two ways want opposite corrections: a dropped hip has to come up, a
+  /// raised one has to come down. Telling the user the wrong one is worse than
+  /// saying nothing, so the direction is read off the hip's side of the
+  /// shoulder→knee line.
+  ///
+  /// Returns null when the body lies closer to vertical than horizontal in the
+  /// frame — a push-up filmed end-on, where "above the line" carries no
+  /// information about the hip and either cue would be a guess.
+  FormFault? _hipBreak(
+    PoseLandmark shoulder,
+    PoseLandmark hip,
+    PoseLandmark knee,
+  ) {
+    final run = knee.x - shoulder.x;
+    final rise = knee.y - shoulder.y;
+    if (run.abs() <= rise.abs()) return null;
+
+    final lineY = shoulder.y + (hip.x - shoulder.x) / run * rise;
+    // Image y grows downward, so the hip below the line is the sagging one.
+    return hip.y > lineY ? FormFault.pushUpHipSag : FormFault.pushUpHipPike;
   }
 
   // Angle at vertex [b] formed by points a-b-c, in degrees.

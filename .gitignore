@@ -52,3 +52,4 @@ app.*.map.json
 memory/
 .obsidian/
 รายงาน_CS303_FormAI.*
+report_findings/

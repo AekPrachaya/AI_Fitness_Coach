@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../exercise_analyzer.dart';
+import '../form_fault.dart';
 
 class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override PoseLandmarkType get primaryA => PoseLandmarkType.leftShoulder;
@@ -14,6 +15,16 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override double get upThreshold   => 150.0;
   @override String get angleLabel    => 'ข้อศอก (องศา)';
   @override double get met         => 3.5; // isolated arm work, light effort
+
+  /// The exception among the four: both curl checks survive a front view.
+  ///
+  /// Elbow drift is measured sideways from the shoulder, which catches the
+  /// elbow flaring out when seen from the front and drifting forward when
+  /// seen from the side — both of them faults. Body sway is a rock from side
+  /// to side, equally visible either way. The elbow angle itself is cleanest
+  /// in profile but still closes plainly face-on, so demanding a side view
+  /// would cost the user more than it buys.
+  @override bool get needsSideView => false;
   @override double get hysteresis  => 10.0; // fast movement over a wide range; swings jitter
 
   static const _analyzeThreshold = 120.0;
@@ -32,7 +43,7 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
     }
 
     final lms = pose.landmarks;
-    final issues = <String>[];
+    final faults = <FormFault>[];
 
     final arm = ExerciseAnalyzer.bestSide(
       lms,
@@ -48,15 +59,17 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
       if (upperArmLen > 0) {
         // 1. Elbow drift
         final driftRatio = (elbow.x - shoulder.x).abs() / upperArmLen;
-        if (driftRatio > _elbowDriftMaxRatio) issues.add('ล็อกข้อศอกไว้ข้างลำตัว');
+        if (driftRatio > _elbowDriftMaxRatio) {
+          faults.add(FormFault.curlElbowDrift);
+        }
 
         // 2. Body sway
         _shoulderXAtCurlStart ??= shoulder.x;
         final swayRatio = (shoulder.x - _shoulderXAtCurlStart!).abs() / upperArmLen;
-        if (swayRatio > _bodySwayMaxRatio) issues.add('อย่าแกว่งตัว');
+        if (swayRatio > _bodySwayMaxRatio) faults.add(FormFault.curlBodySway);
       }
     }
 
-    return ExerciseAnalyzer.verdict(issues);
+    return ExerciseAnalyzer.verdict(faults);
   }
 }

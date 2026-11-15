@@ -3,7 +3,12 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../../../core/services/body_view.dart';
 import '../../../core/services/exercise_analyzer.dart';
+import '../../../core/services/form_alerts.dart';
+import '../../../core/services/form_coach.dart';
+import '../../../core/services/form_speech.dart';
+import '../../../core/services/movement_tracker.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
@@ -37,6 +42,7 @@ class WorkoutSessionState {
     this.jointAngle,
     this.angleLabel = 'องศา',
     this.formResult,
+    this.cue,
     this.errorMessage,
     this.poses = const [],
     this.absoluteImageSize = Size.zero,
@@ -55,6 +61,11 @@ class WorkoutSessionState {
   final double? jointAngle;
   final String angleLabel;
   final FormResult? formResult;
+
+  /// The coaching line to show right now — one correction, held long enough
+  /// to read. Null when there is nothing to say.
+  final FormCue? cue;
+
   final String? errorMessage;
   final List<Pose> poses;
   final Size absoluteImageSize;
@@ -80,6 +91,7 @@ class WorkoutSessionState {
     double? jointAngle,
     String? angleLabel,
     FormResult? formResult,
+    FormCue? cue,
     String? errorMessage,
     List<Pose>? poses,
     Size? absoluteImageSize,
@@ -90,6 +102,7 @@ class WorkoutSessionState {
     // frame-scoped fields (body left the frame) needs explicit flags.
     bool clearJointAngle = false,
     bool clearFormResult = false,
+    bool clearCue = false,
   }) {
     return WorkoutSessionState(
       status: status ?? this.status,
@@ -102,6 +115,7 @@ class WorkoutSessionState {
       jointAngle: clearJointAngle ? null : (jointAngle ?? this.jointAngle),
       angleLabel: angleLabel ?? this.angleLabel,
       formResult: clearFormResult ? null : (formResult ?? this.formResult),
+      cue: clearCue ? null : (cue ?? this.cue),
       errorMessage: errorMessage,
       poses: poses ?? this.poses,
       absoluteImageSize: absoluteImageSize ?? this.absoluteImageSize,
@@ -115,8 +129,11 @@ class WorkoutSessionState {
 // ── Notifier ───────────────────────────────────────────────────────────────
 
 class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
-  WorkoutSessionNotifier(String exerciseId)
-      : _analyzer = ExerciseAnalyzer.forId(exerciseId),
+  WorkoutSessionNotifier(
+    String exerciseId, {
+    FormAlerts? alerts,
+  })  : _analyzer = ExerciseAnalyzer.forId(exerciseId),
+        _alerts = alerts ?? _coachingAlerts(),
         super(const WorkoutSessionState()) {
     _repCounter = RepCounter(
       downThreshold: _analyzer.downThreshold,
@@ -126,11 +143,24 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     state = state.copyWith(angleLabel: _analyzer.angleLabel);
   }
 
+  /// Buzz and voice together: the buzz lands instantly and says *something*
+  /// is wrong, the voice arrives a beat later and says what to do about it.
+  static FormAlerts _coachingAlerts() => CombinedFormAlerts([
+        const HapticFormAlerts(),
+        SpokenFormAlerts(),
+      ]);
+
   final ExerciseAnalyzer _analyzer;
+  final FormAlerts _alerts;
+  final _coach = FormCoach();
+  final _movement = MovementTracker();
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();
   final _watchdog = TrackingWatchdog();
+
+  /// Torso length last seen at the top of the movement, for [BodyView].
+  double? _standingTorso;
   late final RepCounter _repCounter;
   Timer? _restTimer;
 
@@ -178,10 +208,13 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
     if (poses.isEmpty) {
       _applyTracking(TrackingLoss.noBody);
+      _coach.reset();
+      _movement.reset();
       state = state.copyWith(
         poses: [],
         clearJointAngle: true,
         clearFormResult: true,
+        clearCue: true,
         absoluteImageSize: absSize,
         errorMessage: state.errorMessage,
       );
@@ -195,16 +228,48 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       [_analyzer.altA, _analyzer.altB, _analyzer.altC],
     );
 
-    _applyTracking(joints == null ? TrackingLoss.lowConfidence : null);
+    // A camera square to the user defeats every horizontal measurement the
+    // form checks are built on, so it is reported before a confidence problem:
+    // the tracking is fine, the camera is in the wrong place, and that is the
+    // advice the user can act on.
+    // The top of the movement is the one moment the trunk is upright and its
+    // full length is on show; remember it so the bottom of the rep is not
+    // mistaken for a turn toward the camera.
+    if (joints case [final a, final b, final c]
+        when calculateAngle(a, b, c) > _analyzer.upThreshold) {
+      _standingTorso = BodyView.torsoLength(lms) ?? _standingTorso;
+    }
+
+    final TrackingLoss? loss;
+    if (_analyzer.needsSideView &&
+        BodyView.of(lms, standingTorso: _standingTorso) == ViewAngle.front) {
+      loss = TrackingLoss.notSideOn;
+    } else if (joints == null) {
+      loss = TrackingLoss.lowConfidence;
+    } else {
+      loss = null;
+    }
+
+    _applyTracking(loss);
+    if (loss != null) _coachOn(FormResult.notEvaluated);
 
     double? angle;
     FormResult? form;
 
-    if (joints case [final a, final b, final c]) {
+    // Nothing is graded through a loss. Reps are not counted either: an angle
+    // measured from the wrong side is not a smaller truth, it is a different
+    // number, and counting reps off it would inflate the session.
+    if (joints case [final a, final b, final c] when loss == null) {
       if (state.status != SessionStatus.tracking) return;
       angle = calculateAngle(a, b, c);
-      form = _analyzer.analyze(poses.first, angle);
+      _movement.update(angle);
+      // Faults the current point in the rep cannot judge are dropped before
+      // anything sees them — the live cue and the session tally alike.
+      form = _analyzer
+          .analyze(poses.first, angle)
+          .judgeableNow(bottomedOut: _movement.bottomedOut);
       _stats.observe(form);
+      _coachOn(form);
 
       final repDone = _repCounter.update(angle);
       if (repDone) {
@@ -220,6 +285,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
           poses: poses,
           jointAngle: angle,
           formResult: form,
+          cue: _coach.cue,
+          clearCue: _coach.cue == null,
           absoluteImageSize: absSize,
         );
         await Future.delayed(const Duration(milliseconds: 600));
@@ -238,10 +305,18 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       clearJointAngle: angle == null,
       formResult: form,
       clearFormResult: form == null,
+      cue: _coach.cue,
+      clearCue: _coach.cue == null,
       repCount: _repCounter.count,
       absoluteImageSize: absSize,
       errorMessage: state.errorMessage,
     );
+  }
+
+  /// Runs one graded frame past the coach and buzzes if it raised something.
+  void _coachOn(FormResult form) {
+    final cue = _coach.update(form);
+    if (cue != null && cue.alert) _alerts.raise(cue);
   }
 
   /// Moves the session between tracking and error as detection comes and goes.
@@ -249,6 +324,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     final sustained = _watchdog.observe(loss);
 
     if (sustained != null && state.status == SessionStatus.tracking) {
+      // Whatever the user was in the middle of, it is not finishable now.
+      _repCounter.abandonRep();
       state = state.copyWith(
         status: SessionStatus.error,
         errorMessage: _messageFor(sustained),
@@ -264,6 +341,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         TrackingLoss.noBody => 'ไม่เห็นตัวคุณ — ถอยห่างให้กล้องเห็นทั้งตัว',
         TrackingLoss.lowConfidence =>
           'มองข้อต่อไม่ชัด — ลองเพิ่มแสงหรือปรับมุมกล้อง',
+        TrackingLoss.notSideOn =>
+          'ตรวจท่าจากด้านหน้าไม่ได้ — ย้ายกล้องไปด้านข้างลำตัว',
       };
 
   void pause() {
@@ -271,7 +350,14 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         state.status == SessionStatus.repComplete ||
         state.status == SessionStatus.error) {
       _clock.pause();
-      state = state.copyWith(status: SessionStatus.paused);
+      _repCounter.abandonRep();
+      _coach.reset();
+      _movement.reset();
+      _alerts.silence();
+      state = state.copyWith(
+        status: SessionStatus.paused,
+        clearCue: true,
+      );
     }
   }
 
@@ -280,6 +366,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _clock.resume();
       // Detection starts over rather than resuming into a stale error.
       _watchdog.reset();
+      _coach.reset();
+      _movement.reset();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -293,6 +381,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void endSession() {
     _restTimer?.cancel();
+    _coach.reset();
+    _alerts.silence();
     state = _settled(state.copyWith(status: SessionStatus.finished));
   }
 
@@ -304,6 +394,9 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   Future<void> _onSetComplete() async {
     _restTimer?.cancel();
     _watchdog.reset();
+    _coach.reset();
+    _movement.reset();
+    _alerts.silence();
 
     final setReps = _repCounter.count;
     final isLastSet = state.currentSet >= state.targetSets;
@@ -352,17 +445,21 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   void _startNextSet() {
     _repCounter.reset();
     _watchdog.reset();
+    _coach.reset();
+    _movement.reset();
     state = state.copyWith(
       status: SessionStatus.tracking,
       currentSet: state.currentSet + 1,
       repCount: 0,
       restSecondsLeft: 60,
+      clearCue: true,
     );
   }
 
   @override
   void dispose() {
     _restTimer?.cancel();
+    _alerts.dispose();
     _poseService.dispose();
     super.dispose();
   }
