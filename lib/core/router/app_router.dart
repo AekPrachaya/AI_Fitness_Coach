@@ -161,6 +161,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                       key: state.pageKey,
                       child: WorkoutSummaryScreen(
                         workoutId: state.pathParameters['id']!,
+                        sessionId: state.uri.queryParameters['session'],
                       ),
                     ),
                   ),

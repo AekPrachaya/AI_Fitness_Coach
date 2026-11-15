@@ -80,6 +80,7 @@ class SessionData {
     required this.estimatedCalories,
     required this.mostCommonError,
     required this.exercises,
+    this.aiTip = '',
   });
 
   final String id;
@@ -92,6 +93,10 @@ class SessionData {
   final int estimatedCalories;
   final String mostCommonError;
   final List<ExerciseResult> exercises;
+
+  /// Coaching line stored with the session. Seeded demo rows carry one;
+  /// recorded sessions save an empty string and the summary derives its own.
+  final String aiTip;
 
   factory SessionData.fromJson(Map<String, dynamic> j) => SessionData(
         id: j['id'] as String,
@@ -106,6 +111,7 @@ class SessionData {
         exercises: (j['exercises'] as List)
             .map((e) => ExerciseResult.fromJson(e as Map<String, dynamic>))
             .toList(),
+        aiTip: j['ai_tip'] as String? ?? '',
       );
 
   /// Parses either storage shape (raw Hive map or JSON string) without ever
@@ -135,6 +141,7 @@ class SessionData {
               .whereType<ExerciseResult>()
               .toList()
           : const [],
+      aiTip: _asString(j['ai_tip']),
     );
   }
 
@@ -149,5 +156,6 @@ class SessionData {
         'estimated_calories': estimatedCalories,
         'most_common_error': mostCommonError,
         'exercises': exercises.map((e) => e.toMap()).toList(),
+        'ai_tip': aiTip,
       };
 }
