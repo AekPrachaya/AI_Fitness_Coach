@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +15,9 @@ class PoseDetectionService {
     CameraImage image,
     CameraDescription camera,
   ) async {
+    // google_mlkit_pose_detection wraps the native Android/iOS SDKs only —
+    // there is no web plugin implementation to call into.
+    if (kIsWeb) return null;
     if (_isBusy) return null;
     _isBusy = true;
     try {
@@ -34,11 +36,13 @@ class PoseDetectionService {
     // iOS BGRA8888 stream delivers images already in portrait orientation
     // (height > width), so no rotation is needed — passing rotation90deg
     // would double-rotate the coordinates.
-    final rotation = (Platform.isIOS && image.height > image.width)
-        ? InputImageRotation.rotation0deg
-        : _inputRotation(camera.sensorOrientation);
+    final rotation =
+        (defaultTargetPlatform == TargetPlatform.iOS &&
+                image.height > image.width)
+            ? InputImageRotation.rotation0deg
+            : _inputRotation(camera.sensorOrientation);
 
-    if (Platform.isIOS) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
       final plane = image.planes[0];
       return InputImage.fromBytes(
         bytes: plane.bytes,
@@ -52,7 +56,7 @@ class PoseDetectionService {
     }
 
     // Android: concatenate YUV planes
-    if (Platform.isAndroid) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       final bytes = _concatenatePlanes(image.planes);
       return InputImage.fromBytes(
         bytes: bytes,

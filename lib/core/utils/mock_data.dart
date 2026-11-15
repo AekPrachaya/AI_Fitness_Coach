@@ -54,11 +54,23 @@ abstract class MockData {
         joinedAt: DateTime.now(),
       );
 
-  // ── Method 3: Seed ~20 sessions across the past 30 days ────────────────────
-  // Idempotent — checks 'seeded' flag before writing.
+  /// Bumped whenever the generated demo history changes shape, so devices that
+  /// already seeded pick the new data up exactly once.
+  static const int seedVersion = 5;
+
+  /// Days of demo history — the widest heatmap window (52 weeks), so a desktop
+  /// width never shows empty columns on the left.
+  static const int seedDays = 364;
+
+  /// Inclusive day range (counted from the oldest seeded day) left free of rest
+  /// days, giving the demo history one 11-day personal best.
+  static const int _bestRunStart = 30;
+  static const int _bestRunEnd = 40;
+
+  // ── Method 3: Seed demo sessions across the past [seedDays] days ───────────
   static Future<void> seedProgressHistory() async {
     final box = Hive.box(boxSessionHistory);
-    if (box.get('seeded') == true) return;
+    if (box.get('seed_version') == seedVersion) return;
 
     const exerciseIds = ['push_ups', 'squats', 'deadlifts', 'bicep_curls'];
     const exerciseNames = ['Push-ups', 'Squats', 'Deadlifts', 'Bicep Curls'];
@@ -73,36 +85,64 @@ abstract class MockData {
     final sessions = <Map<String, dynamic>>[];
     final now = DateTime.now();
 
-    for (var i = 29; i >= 0; i--) {
-      if (i % 3 == 0) continue; // every 3rd day is a rest day
-      final idx = i % 4;
-      final score = (65.0 + (i % 30)).clamp(65.0, 94.0);
-      sessions.add({
-        'id': 'mock_session_$i',
-        'workout_id': exerciseIds[idx],
-        'workout_name': exerciseNames[idx],
-        'completed_at': now.subtract(Duration(days: i)).toIso8601String(),
-        'duration_seconds': 900 + (i * 20),
-        'total_reps': 48 + (i * 2),
-        'avg_form_score': score,
-        'estimated_calories': 120 + (i * 4),
-        'most_common_error': 'Keep knees aligned',
-        'ai_tip': tips[i % tips.length],
-        'exercises': [
-          {
-            'exercise_id': exerciseIds[idx],
-            'exercise_name': exerciseNames[idx],
-            'sets_completed': 3,
-            'total_reps': 36,
-            'avg_form_score': score,
-            'most_common_error': 'Keep knees aligned',
-          },
-        ],
-      });
+    // Rotates over emitted sessions, not over the calendar: keying the exercise
+    // off the day would collide with the rest cycle and starve one exercise.
+    var rotation = 0;
+
+    for (var i = seedDays - 1; i >= 0; i--) {
+      // age 0 = oldest day, so form improves as the history approaches today.
+      final age = seedDays - 1 - i;
+
+      // Rest every fourth day, except through one unbroken stretch — without it
+      // the best streak would be pinned at the cycle length and the streak card
+      // would look broken rather than merely modest.
+      final inBestRun = age >= _bestRunStart && age <= _bestRunEnd;
+      if (!inBestRun && age % 4 == 3) continue;
+
+      final idx = rotation++ % exerciseIds.length;
+      // Scaled by progress through the history rather than raw age, so a
+      // longer window still climbs gradually instead of pinning at the cap.
+      final progress = age / (seedDays - 1);
+      final score = (62.0 + progress * 26 + (i % 5) * 2).clamp(60.0, 97.0);
+      // 10–50 min, so day intensity spans every heatmap shade.
+      final durationSeconds = 600 + (i % 9) * 300;
+
+      void addSession(String suffix, int hourOffset) {
+        sessions.add({
+          'id': 'mock_session_$i$suffix',
+          'workout_id': exerciseIds[idx],
+          'workout_name': exerciseNames[idx],
+          'completed_at': now
+              .subtract(Duration(days: i, hours: hourOffset))
+              .toIso8601String(),
+          'duration_seconds': durationSeconds,
+          'total_reps': 36 + (i % 6) * 4,
+          'avg_form_score': score,
+          'estimated_calories': 110 + (i % 7) * 15,
+          'most_common_error': 'Keep knees aligned',
+          'ai_tip': tips[i % tips.length],
+          'exercises': [
+            {
+              'exercise_id': exerciseIds[idx],
+              'exercise_name': exerciseNames[idx],
+              'sets_completed': 3,
+              'total_reps': 36,
+              'avg_form_score': score,
+              'most_common_error': 'Keep knees aligned',
+            },
+          ],
+        });
+      }
+
+      addSession('', 0);
+      // An occasional double session gives the heatmap its darkest cells.
+      if (i % 11 == 0) addSession('_b', 5);
     }
 
     await box.put('sessions', sessions);
-    await box.put('seeded', true);
+    await box.put('seed_version', seedVersion);
+    // Retire the pre-versioning flag so it cannot mask a future re-seed.
+    await box.delete('seeded');
   }
 
   // ── Method 4: Seed 8 weekly body-metric entries ─────────────────────────────
