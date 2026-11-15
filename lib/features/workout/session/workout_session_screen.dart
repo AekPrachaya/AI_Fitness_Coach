@@ -11,11 +11,14 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/workout_repository.dart';
+import 'session_progress.dart';
 import 'session_stats.dart';
 import 'widgets/form_cue_banner.dart';
 import 'widgets/pose_overlay_painter.dart';
+import 'widgets/rep_counter_panel.dart';
 import 'widgets/rest_overlay.dart';
 import 'widgets/session_interrupted_overlay.dart';
+import 'widgets/session_top_bar.dart';
 import 'widgets/set_complete_overlay.dart';
 import 'widgets/tracking_error_overlay.dart';
 import 'workout_session_notifier.dart';
@@ -339,6 +342,18 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       },
     );
 
+    // A light tap per counted rep — lighter than the form-fault buzz, so the
+    // two cannot be mistaken for each other. The last rep of a set arrives
+    // together with setComplete and still raises the count; the reset to zero
+    // for the next set does not.
+    ref.listen<int>(
+      workoutSessionNotifierProvider(widget.exerciseId)
+          .select((s) => s.repCount),
+      (prev, next) {
+        if (next > (prev ?? 0)) HapticFeedback.lightImpact();
+      },
+    );
+
     ref.listen<WorkoutSessionState>(
       workoutSessionNotifierProvider(widget.exerciseId),
       (prev, next) {
@@ -404,29 +419,51 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
             ),
 
           Positioned(
-            top: MediaQuery.of(context).padding.top,
+            top: 0,
             left: 0,
             right: 0,
-            child: _buildTopBar(context, session, notifier),
+            child: SessionTopBar(
+              exerciseName: widget.exerciseName,
+              currentSet: session.currentSet,
+              targetSets: session.targetSets,
+              progress: sessionProgress(session),
+              isPaused: session.status == SessionStatus.paused,
+              readElapsed: () => _notifier.liveElapsedSeconds,
+              onBack: () => context.pop(),
+              onFlipCamera: _isSwitching ? null : _requestCameraSwitch,
+              onTogglePause: session.status == SessionStatus.paused
+                  ? notifier.resume
+                  : notifier.pause,
+            ),
           ),
 
-          if (session.cue != null &&
-              (session.status == SessionStatus.tracking ||
-                  session.status == SessionStatus.repComplete))
-            Positioned(
-              left: AppSpacing.md,
-              right: AppSpacing.md,
-              bottom:
-                  MediaQuery.of(context).padding.bottom + AppSpacing.md + 88,
-              child: FormCueBanner(cue: session.cue!),
-            ),
-
+          // The cue rides on top of the rep panel in one column, so the panel
+          // can change height without the banner sliding underneath it.
           if (session.status != SessionStatus.resting)
             Positioned(
               left: AppSpacing.md,
               right: AppSpacing.md,
               bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
-              child: _buildHud(context, session),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (session.cue != null &&
+                      (session.status == SessionStatus.tracking ||
+                          session.status == SessionStatus.repComplete)) ...[
+                    FormCueBanner(cue: session.cue!),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  RepCounterPanel(
+                    repCount: session.repCount,
+                    targetReps: session.targetReps,
+                    angleLabel: session.angleLabel,
+                    angleText: session.jointAngle != null
+                        ? '${session.jointAngle!.toStringAsFixed(0)}°'
+                        : '--',
+                    bodyFound: session.poses.isNotEmpty,
+                  ),
+                ],
+              ),
             ),
 
           if (session.status == SessionStatus.error &&
@@ -484,113 +521,6 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
           child: CameraPreview(controller),
         ),
       ),
-    );
-  }
-
-  Widget _buildTopBar(
-    BuildContext context,
-    WorkoutSessionState session,
-    WorkoutSessionNotifier notifier,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: AppColors.textPrimary),
-            onPressed: () => context.pop(),
-          ),
-          const Spacer(),
-          Text(
-            'Set ${session.currentSet}/${session.targetSets}',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.flip_camera_ios_rounded,
-                color: AppColors.textPrimary),
-            onPressed: _isSwitching ? null : _requestCameraSwitch,
-          ),
-          IconButton(
-            icon: Icon(
-              session.status == SessionStatus.paused
-                  ? Icons.play_arrow_rounded
-                  : Icons.pause_rounded,
-              color: AppColors.textPrimary,
-            ),
-            onPressed: session.status == SessionStatus.paused
-                ? notifier.resume
-                : notifier.pause,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHud(BuildContext context, WorkoutSessionState session) {
-    final angleText = session.jointAngle != null
-        ? '${session.jointAngle!.toStringAsFixed(0)}°'
-        : '--';
-    final bodyFound = session.poses.isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.92),
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.borderSubtle),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _hudItem(context, 'Reps', '${session.repCount}'),
-          Container(width: 1, height: 40, color: AppColors.divider),
-          _hudItem(context, session.angleLabel, angleText),
-          Container(width: 1, height: 40, color: AppColors.divider),
-          _hudItem(
-            context,
-            'สถานะ',
-            bodyFound ? 'พบแล้ว' : 'ไม่เจอ',
-            valueColor: bodyFound ? AppColors.success : AppColors.error,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hudItem(
-    BuildContext context,
-    String label,
-    String value, {
-    Color valueColor = AppColors.accent,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: valueColor,
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-      ],
     );
   }
 }
