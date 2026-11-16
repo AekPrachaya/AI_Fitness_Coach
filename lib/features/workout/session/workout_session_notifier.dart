@@ -170,6 +170,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   /// Every fault seen this session, most frequent first.
   Map<String, int> get errorCounts => _stats.errorCounts;
 
+  /// Active session time so far, pauses excluded — the same clock the stored
+  /// duration is settled from. Read by the HUD timer, which polls it; the
+  /// state's `elapsedSeconds` is only filled in once the session finishes.
+  int get liveElapsedSeconds => _clock.elapsedSeconds;
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Applies the workout's own set and rep targets. Only takes effect before

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/duration_format.dart';
 import '../../../shared/models/session_data.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -171,14 +172,6 @@ class _StatsGrid extends StatelessWidget {
 
   final SessionData session;
 
-  static String _duration(int seconds) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    final s = seconds % 60;
-    String two(int v) => v.toString().padLeft(2, '0');
-    return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final score = session.avgFormScore;
@@ -192,7 +185,7 @@ class _StatsGrid extends StatelessWidget {
               child: _StatTile(
                 icon: Icons.timer_outlined,
                 label: 'DURATION',
-                value: _duration(session.durationSeconds),
+                value: formatClock(session.durationSeconds),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
