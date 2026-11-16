@@ -126,7 +126,6 @@ class RestOverlay extends StatelessWidget {
                     Expanded(
                       child: AppSecondaryButton(
                         label: '−15s',
-                        leadingIcon: Icons.remove_rounded,
                         onTap: onSubtract15,
                       ),
                     ),
@@ -134,7 +133,6 @@ class RestOverlay extends StatelessWidget {
                     Expanded(
                       child: AppSecondaryButton(
                         label: '+30s',
-                        leadingIcon: Icons.add_rounded,
                         onTap: onAdd30,
                       ),
                     ),
