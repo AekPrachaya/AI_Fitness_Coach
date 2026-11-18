@@ -290,7 +290,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
   /// This belongs to the session rather than to the summary screen: the summary
   /// is only a view of the result, and a workout that was actually performed
   /// has to be recorded whether or not the user ever looks at it.
-  void _saveSession(WorkoutSessionState state) {
+  ///
+  /// Returns the stored session's id, so the summary opens this session
+  /// rather than whichever one of the exercise is newest.
+  String _saveSession(WorkoutSessionState state) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
     final repo = ref.read(workoutRepositoryProvider);
     final calories = SessionStats.estimateCalories(
       met: ExerciseAnalyzer.forId(widget.exerciseId).met,
@@ -299,7 +303,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     );
 
     repo.saveSession({
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'id': id,
       'workout_id': widget.exerciseId,
       'workout_name': widget.exerciseName,
       'completed_at': DateTime.now().toIso8601String(),
@@ -324,6 +328,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
 
     // Home and Progress both hold cached reads of the box.
     ref.invalidate(sessionHistoryProvider);
+    return id;
   }
 
   @override
@@ -359,8 +364,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       (prev, next) {
         if (next.status == SessionStatus.finished &&
             prev?.status != SessionStatus.finished) {
-          _saveSession(next);
-          context.go(RouteNames.workoutSummaryPath(widget.exerciseId));
+          final sessionId = _saveSession(next);
+          context.go(RouteNames.workoutSummaryPath(
+            widget.exerciseId,
+            sessionId: sessionId,
+          ));
         }
       },
     );

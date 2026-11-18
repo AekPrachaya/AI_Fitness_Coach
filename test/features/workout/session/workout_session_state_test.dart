@@ -89,4 +89,35 @@ void main() {
     expect(failed.errorMessage, 'หาตัวไม่เจอ');
     expect(failed.copyWith(status: SessionStatus.tracking).errorMessage, isNull);
   });
+
+  group('repsDone', () {
+    WorkoutSessionState at(SessionStatus status) => WorkoutSessionState(
+          status: status,
+          repCount: 7,
+          totalReps: 10,
+        );
+
+    test('includes the set in progress', () {
+      // Ending here is the bug this guards: 10 from set one plus 7 so far in
+      // set two used to be saved as 10.
+      for (final status in [
+        SessionStatus.tracking,
+        SessionStatus.repComplete,
+        SessionStatus.paused,
+        SessionStatus.error,
+      ]) {
+        expect(at(status).repsDone, 17, reason: '$status');
+      }
+    });
+
+    test('does not count a folded set twice', () {
+      for (final status in [
+        SessionStatus.setComplete,
+        SessionStatus.resting,
+        SessionStatus.finished,
+      ]) {
+        expect(at(status).repsDone, 10, reason: '$status');
+      }
+    });
+  });
 }

@@ -80,6 +80,19 @@ class WorkoutSessionState {
   /// The fault seen in the most reps; empty when the workout was clean.
   final String mostCommonError;
 
+  /// Reps done so far, the set in progress included.
+  ///
+  /// A finished set is folded into [totalReps] while its [repCount] stays on
+  /// show until the next set starts, so from [SessionStatus.setComplete]
+  /// onward adding [repCount] again would count that set twice.
+  int get repsDone => switch (status) {
+        SessionStatus.setComplete ||
+        SessionStatus.resting ||
+        SessionStatus.finished =>
+          totalReps,
+        _ => totalReps + repCount,
+      };
+
   WorkoutSessionState copyWith({
     SessionStatus? status,
     int? currentSet,
@@ -388,7 +401,12 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _restTimer?.cancel();
     _coach.reset();
     _alerts.silence();
-    state = _settled(state.copyWith(status: SessionStatus.finished));
+    // A set cut short still happened. Only _onSetComplete folded reps into
+    // the total, so ending mid-set used to save the session without them.
+    state = _settled(state.copyWith(
+      status: SessionStatus.finished,
+      totalReps: state.repsDone,
+    ));
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
