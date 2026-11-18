@@ -281,8 +281,12 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _movement.update(angle);
       // Faults the current point in the rep cannot judge are dropped before
       // anything sees them — the live cue and the session tally alike.
+      // At the turnaround the angle is already on its way back up; depth is
+      // how low the rep went, so that frame is judged at the low point.
+      final judged =
+          _movement.bottomedOut ? _movement.bottomAngle! : angle;
       form = _analyzer
-          .analyze(poses.first, angle)
+          .analyze(poses.first, judged)
           .judgeableNow(bottomedOut: _movement.bottomedOut);
       _stats.observe(form);
       _coachOn(form);
