@@ -46,24 +46,28 @@ class MovementTracker:
     any rise past the noise floor and judged depth on the rising frame.
     """
 
-    def __init__(self, noise_floor: float = 1.5, rise: float = 5):
-        self.noise_floor, self.rise = noise_floor, rise
+    def __init__(self, noise_floor: float = 1.5, rise: float = 5, rearm_above: float | None = None):
+        self.noise_floor, self.rise, self.rearm_above = noise_floor, rise, rearm_above
         self.reset()
 
     def reset(self):
         self.last, self.low, self.bottom = None, None, None
-        self.phase, self.bottomed_out = "still", False
+        self.phase, self.bottomed_out, self.armed = "still", False, True
 
     def update(self, angle: float):
         self.bottomed_out = False
+        if self.rearm_above is not None and angle > self.rearm_above:
+            self.armed = True
         if self.last is None:
             self.last = angle
             return
         if self.rise and self.phase == "descending":
             self.low = min(self.low, angle)
             if angle - self.low >= self.rise:
-                self.bottomed_out, self.bottom = True, self.low
+                self.bottomed_out, self.bottom = self.armed, self.low
                 self.phase, self.last = "ascending", angle
+                if self.rearm_above is not None:
+                    self.armed = False
             return
         delta = angle - self.last
         if abs(delta) < self.noise_floor:
@@ -93,13 +97,13 @@ def analyze(angle, shin, torso, args) -> list[str] | None:
 
 def replay(frames: list[Frame], rows: list[dict], args) -> list[dict]:
     reps = []
-    movement = MovementTracker(rise=args.rise)
+    movement = MovementTracker(rise=args.rise, rearm_above=None if args.no_rearm else args.up)
     waiting_down, standing = True, None
     candidate, candidate_frames = None, 0
     rep = None
 
     def new_rep():
-        return {"stats": set(), "cue": set(), "graded": False, "bottom": 999.0,
+        return {"stats": set(), "cue": set(), "graded": False, "bottom": 999.0, "turns": [],
                 "max_shin": 0.0, "max_torso": 0.0}
 
     rep = new_rep()
@@ -118,15 +122,17 @@ def replay(frames: list[Frame], rows: list[dict], args) -> list[dict]:
         torso = float(r["torso_deg"]) if r["torso_deg"] else None
         movement.update(angle)
 
-        faults = analyze(angle, shin, torso, args)
+        # The notifier grades the turnaround frame at the low point, so the
+        # analyzer sees bottomAngle there — including its 130° cut-off.
+        judged = movement.bottom if movement.rise and movement.bottomed_out else angle
+        faults = analyze(judged, shin, torso, args)
         if faults is not None:
             # judgeableNow: range-of-motion faults only at the turnaround.
             if not movement.bottomed_out:
                 faults = [x for x in faults if x not in RANGE_OF_MOTION]
-            elif movement.bottom <= args.depth:
-                # Judged at the low point, as the notifier now does.
-                faults = [x for x in faults if x not in RANGE_OF_MOTION]
             rep["graded"] = True
+            if movement.bottomed_out:
+                rep["turns"].append(round(judged, 1))
             rep["stats"].update(faults)
             rep["bottom"] = min(rep["bottom"], angle)
             if shin is not None:
@@ -171,6 +177,8 @@ def main() -> None:
     p.add_argument("--confirm", type=int, default=3, help="FormCoach.confirmFrames")
     p.add_argument("--rise", type=float, default=5,
                    help="MovementTracker.riseToTurn (0 = the app before 2026-11-18)")
+    p.add_argument("--no-rearm", action="store_true",
+                   help="judge every turnaround, not one per rep (the app before the rearm fix)")
     p.add_argument("--group", help="column to split results by: group, person, code, sex")
     p.add_argument("--participants", type=Path, help="CSV keyed by person, adds e.g. sex")
     args = p.parse_args()
@@ -202,6 +210,7 @@ def main() -> None:
                 "max_shin": round(rep["max_shin"], 1), "max_torso": round(rep["max_torso"], 1),
                 "stats_faults": "|".join(x for x in FAULTS if x in rep["stats"]),
                 "cue_faults": "|".join(x for x in FAULTS if x in rep["cue"]),
+                "turnarounds": " ".join(str(t) for t in rep["turns"]),
             })
 
     with (args.out / "form_per_rep.csv").open("w", newline="") as fh:
