@@ -47,10 +47,23 @@ void main() {
 
   test('flags the knee travelling past the toes', () {
     // Knee 100px in front of the ankle over a 100px shin — a 45 degree shin,
-    // past the 40 degree limit.
+    // past the 35 degree limit.
     final result = analyzer.analyze(stackedPose(kneeX: 200), 85);
     expect(result.topFault, FormFault.squatKneeOverToe);
     expect(result.feedback, FormFault.squatKneeOverToe.cue);
+  });
+
+  test('flags a shin a few degrees past the limit', () {
+    // About 37°: a knee pushed forward by lifted heels, which the old 40°
+    // limit let through.
+    final result = analyzer.analyze(stackedPose(kneeX: 176), 85);
+    expect(result.faults, contains(FormFault.squatKneeOverToe));
+  });
+
+  test('leaves a normal forward shin alone', () {
+    // About 30°: the median shin of a good squat in labelled footage.
+    final result = analyzer.analyze(stackedPose(kneeX: 158), 85);
+    expect(result.faults, isNot(contains(FormFault.squatKneeOverToe)));
   });
 
   test('flags an over-folded torso', () {

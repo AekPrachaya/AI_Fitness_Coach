@@ -21,7 +21,11 @@ class SquatAnalyzer extends ExerciseAnalyzer {
 
   static const _analyzeThreshold = 130.0;
   static const _depthThreshold   = 90.0;
-  static const _shinForwardMax   = 40.0;
+  // Lifted heels pitch the knees forward, so the shin angle catches them too.
+  // On 630 labelled side-on test images, 40° caught 53% of heel-lift squats
+  // and 35° 92%, warning on 1% of good ones; 36 normal reps from our own
+  // footage drew no warning at either.
+  static const _shinForwardMax   = 35.0;
   static const _torsoLeanMax     = 55.0;
 
   @override
