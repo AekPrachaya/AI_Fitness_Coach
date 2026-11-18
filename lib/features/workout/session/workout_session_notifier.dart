@@ -164,7 +164,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final ExerciseAnalyzer _analyzer;
   final FormAlerts _alerts;
   final _coach = FormCoach();
-  final _movement = MovementTracker();
+  late final _movement = MovementTracker(rearmAbove: _analyzer.upThreshold);
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();

@@ -8,7 +8,11 @@ enum MovementPhase { descending, ascending, still }
 /// depending entirely on which direction the user is moving, and the angle
 /// cannot say which.
 class MovementTracker {
-  MovementTracker({this.noiseFloor = 1.5, this.riseToTurn = 5.0});
+  MovementTracker({
+    this.noiseFloor = 1.5,
+    this.riseToTurn = 5.0,
+    this.rearmAbove,
+  });
 
   /// Degrees of change to ignore before calling the movement a direction.
   ///
@@ -29,6 +33,18 @@ class MovementTracker {
   /// short.
   final double riseToTurn;
 
+  /// After a turnaround, no other is reported until the angle has climbed
+  /// past this — the top of the movement, the same line the rep counter
+  /// waits for. Null reports every turnaround.
+  ///
+  /// One rep has one depth. On the phone, ML Kit's angle dipped a degree or
+  /// two on the way back up, which read as a fresh descent and, five degrees
+  /// later, a second bottom at 110-130°: a rep that went down to 70° was
+  /// graded at its second "bottom", called shallow, and the cue stayed up
+  /// into the next rep.
+  final double? rearmAbove;
+
+  bool _armed = true;
   double? _last;
   double? _low;
   double? _bottomAngle;
@@ -48,6 +64,8 @@ class MovementTracker {
 
   void update(double angle) {
     _bottomedOut = false;
+    final rearm = rearmAbove;
+    if (rearm != null && angle > rearm) _armed = true;
 
     final last = _last;
     if (last == null) {
@@ -59,8 +77,11 @@ class MovementTracker {
       final low = angle < _low! ? angle : _low!;
       _low = low;
       if (angle - low >= riseToTurn) {
-        _bottomedOut = true;
-        _bottomAngle = low;
+        if (_armed) {
+          _bottomedOut = true;
+          _bottomAngle = low;
+        }
+        if (rearm != null) _armed = false;
         _phase = MovementPhase.ascending;
         _last = angle;
       }
@@ -84,6 +105,7 @@ class MovementTracker {
     _last = null;
     _low = null;
     _bottomAngle = null;
+    _armed = true;
     _phase = MovementPhase.still;
     _bottomedOut = false;
   }

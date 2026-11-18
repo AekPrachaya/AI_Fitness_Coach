@@ -107,4 +107,45 @@ void main() {
     expect(tracker.bottomAngle, isNull);
     expect(bottomsIn([120, 160]), isEmpty);
   });
+
+  group('rearmAbove', () {
+    late MovementTracker rep;
+    setUp(() => rep = MovementTracker(riseToTurn: 5, rearmAbove: 160));
+
+    List<double> bottoms(List<double> angles) {
+      final hits = <double>[];
+      for (final a in angles) {
+        rep.update(a);
+        if (rep.bottomedOut) hits.add(rep.bottomAngle!);
+      }
+      return hits;
+    }
+
+    test('judges a rep once even when the ascent wobbles', () {
+      // Recorded on the phone: down to 70°, then on the way up the angle
+      // dipped twice, each read as a new bottom and graded shallow.
+      final hits = bottoms([
+        175, 140, 100, 70, 80, 100, 116, 114, 120, 126, 124, 131, 150, 172,
+      ]);
+      expect(hits, [70]);
+    });
+
+    test('judges the next rep after standing past the line', () {
+      final hits = bottoms([175, 120, 85, 110, 165, 130, 95, 120, 170]);
+      expect(hits, [85, 95]);
+    });
+
+    test('a rep that never stands up is not judged twice', () {
+      // Rising only to 150 is not the top of a squat; the rep counter does
+      // not count it either.
+      final hits = bottoms([175, 120, 85, 110, 150, 120, 80, 100]);
+      expect(hits, [85]);
+    });
+
+    test('reset rearms', () {
+      bottoms([175, 120, 85, 110]);
+      rep.reset();
+      expect(bottoms([120, 90, 100]), [90]);
+    });
+  });
 }
