@@ -489,8 +489,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
           if (session.status == SessionStatus.resting)
             RestOverlay(
               secondsLeft: session.restSecondsLeft,
-              currentSet: session.currentSet + 1,
+              totalSeconds: session.restTotalSeconds,
+              nextSet: session.currentSet + 1,
               targetSets: session.targetSets,
+              onAdd30: () => notifier.adjustRest(30),
+              onSubtract15: () => notifier.adjustRest(-15),
               onSkip: notifier.skipRest,
             ),
         ],
