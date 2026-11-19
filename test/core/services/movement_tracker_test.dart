@@ -3,7 +3,7 @@ import 'package:ai_fitness_coach/core/services/movement_tracker.dart';
 
 void main() {
   late MovementTracker tracker;
-  setUp(() => tracker = MovementTracker(noiseFloor: 1.5));
+  setUp(() => tracker = MovementTracker(noiseFloor: 1.5, riseToTurn: 5));
 
   /// Feeds a run of angles and returns the frames that read as a turnaround.
   List<double> bottomsIn(List<double> angles) {
@@ -51,12 +51,35 @@ void main() {
     expect(tracker.phase, MovementPhase.descending);
   });
 
-  test('a slow ascent still registers once it clears the noise floor', () {
-    // Half a degree per frame: each step is under the floor, but the drift
-    // accumulates against the last committed angle rather than being lost.
-    final hits = bottomsIn([140, 100, 85, 85.5, 86.0, 86.5, 87.0]);
-    expect(hits, hasLength(1));
+  test('a slow ascent still registers once it clears the rise', () {
+    // One degree per frame: no single step is a turnaround, but the climb
+    // accumulates against the low point rather than being lost.
+    final hits = bottomsIn([140, 100, 85, 86, 87, 88, 89, 90]);
+    expect(hits, [90]);
     expect(tracker.phase, MovementPhase.ascending);
+  });
+
+  test('a flicker on the way down is not the bottom', () {
+    // Recorded rep: the knee read 109.9° then flickered up two degrees
+    // before carrying on to 68.5°. Judged at the flicker, a deep squat was
+    // logged as shallow while the user was still going down.
+    final hits = bottomsIn([150, 130, 109.9, 111.9, 100, 85, 70, 68.5, 70.5, 80]);
+    expect(hits, [80]);
+    expect(tracker.bottomAngle, 68.5);
+  });
+
+  test('reports the lowest point, not the frame the rise is seen on', () {
+    // A rep that reached 89° — deep enough — is seen turning at 95°. Depth
+    // has to be read off 89 or it fails the 90° check by a frame's travel.
+    bottomsIn([140, 110, 92, 89, 91, 95]);
+    expect(tracker.bottomedOut, isTrue);
+    expect(tracker.bottomAngle, 89);
+  });
+
+  test('a rise smaller than riseToTurn keeps the descent going', () {
+    final hits = bottomsIn([140, 100, 90, 94, 93]);
+    expect(hits, isEmpty);
+    expect(tracker.phase, MovementPhase.descending);
   });
 
   test('an ascent with no descent before it is not a bottom', () {
@@ -81,6 +104,48 @@ void main() {
     bottomsIn([160, 120, 85]);
     tracker.reset();
     expect(tracker.phase, MovementPhase.still);
+    expect(tracker.bottomAngle, isNull);
     expect(bottomsIn([120, 160]), isEmpty);
+  });
+
+  group('rearmAbove', () {
+    late MovementTracker rep;
+    setUp(() => rep = MovementTracker(riseToTurn: 5, rearmAbove: 160));
+
+    List<double> bottoms(List<double> angles) {
+      final hits = <double>[];
+      for (final a in angles) {
+        rep.update(a);
+        if (rep.bottomedOut) hits.add(rep.bottomAngle!);
+      }
+      return hits;
+    }
+
+    test('judges a rep once even when the ascent wobbles', () {
+      // Recorded on the phone: down to 70°, then on the way up the angle
+      // dipped twice, each read as a new bottom and graded shallow.
+      final hits = bottoms([
+        175, 140, 100, 70, 80, 100, 116, 114, 120, 126, 124, 131, 150, 172,
+      ]);
+      expect(hits, [70]);
+    });
+
+    test('judges the next rep after standing past the line', () {
+      final hits = bottoms([175, 120, 85, 110, 165, 130, 95, 120, 170]);
+      expect(hits, [85, 95]);
+    });
+
+    test('a rep that never stands up is not judged twice', () {
+      // Rising only to 150 is not the top of a squat; the rep counter does
+      // not count it either.
+      final hits = bottoms([175, 120, 85, 110, 150, 120, 80, 100]);
+      expect(hits, [85]);
+    });
+
+    test('reset rearms', () {
+      bottoms([175, 120, 85, 110]);
+      rep.reset();
+      expect(bottoms([120, 90, 100]), [90]);
+    });
   });
 }

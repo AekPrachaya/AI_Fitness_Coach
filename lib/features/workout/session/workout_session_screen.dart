@@ -8,6 +8,7 @@ import '../../../core/providers/session_history_provider.dart';
 import '../../../core/providers/user_profile_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/exercise_analyzer.dart';
+import '../../../core/services/rep_chime.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/workout_repository.dart';
@@ -55,6 +56,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
   int _cameraIndex = 0;
   bool _isSwitching = false;
   bool _isStreaming = false;
+  final _repChime = RepChime();
 
   /// True once the session has had a working camera, so a null controller
   /// afterwards means "taken away and coming back", not "still starting up".
@@ -282,6 +284,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       controller.dispose();
     }
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _repChime.dispose();
     super.dispose();
   }
 
@@ -342,15 +345,19 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       },
     );
 
-    // A light tap per counted rep — lighter than the form-fault buzz, so the
-    // two cannot be mistaken for each other. The last rep of a set arrives
+    // A light tap and a beep per counted rep — the tap lighter than the
+    // form-fault buzz, so the two cannot be mistaken for each other, and the
+    // beep for a user who is watching their knees rather than the screen. The last rep of a set arrives
     // together with setComplete and still raises the count; the reset to zero
     // for the next set does not.
     ref.listen<int>(
       workoutSessionNotifierProvider(widget.exerciseId)
           .select((s) => s.repCount),
       (prev, next) {
-        if (next > (prev ?? 0)) HapticFeedback.lightImpact();
+        if (next > (prev ?? 0)) {
+          HapticFeedback.lightImpact();
+          _repChime.play();
+        }
       },
     );
 
