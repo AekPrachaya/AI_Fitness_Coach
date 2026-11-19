@@ -54,15 +54,15 @@ void main() {
   });
 
   test('flags a shin a few degrees past the limit', () {
-    // About 37°: a knee pushed forward by lifted heels, which the old 40°
-    // limit let through.
-    final result = analyzer.analyze(stackedPose(kneeX: 176), 85);
+    // About 43°: a knee pushed forward by lifted heels.
+    final result = analyzer.analyze(stackedPose(kneeX: 193), 85);
     expect(result.faults, contains(FormFault.squatKneeOverToe));
   });
 
-  test('leaves a normal forward shin alone', () {
-    // About 30°: the median shin of a good squat in labelled footage.
-    final result = analyzer.analyze(stackedPose(kneeX: 158), 85);
+  test('leaves the forward shin of a deep squat alone', () {
+    // About 37°: what ML Kit read for a very deep squat with the heels down,
+    // past the 35° the labelled images suggested.
+    final result = analyzer.analyze(stackedPose(kneeX: 176), 85);
     expect(result.faults, isNot(contains(FormFault.squatKneeOverToe)));
   });
 

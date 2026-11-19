@@ -21,11 +21,12 @@ class SquatAnalyzer extends ExerciseAnalyzer {
 
   static const _analyzeThreshold = 130.0;
   static const _depthThreshold   = 90.0;
-  // Lifted heels pitch the knees forward, so the shin angle catches them too.
-  // On 630 labelled side-on test images, 40° caught 53% of heel-lift squats
-  // and 35° 92%, warning on 1% of good ones; 36 normal reps from our own
-  // footage drew no warning at either.
-  static const _shinForwardMax   = 35.0;
+  // Lifted heels pitch the knees forward, so this also catches them. Labelled
+  // still images suggested 35°, but on the phone ML Kit reads the shin of a
+  // very deep squat (knee at 32–48°) past 35° with the heels down, and at 40°
+  // it still flagged all three heel-lift reps of a recorded test while
+  // warning on one deep normal rep in three. 40 until more footage settles it.
+  static const _shinForwardMax   = 40.0;
   static const _torsoLeanMax     = 55.0;
 
   @override
