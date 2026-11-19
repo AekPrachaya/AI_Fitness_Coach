@@ -13,9 +13,18 @@ import '../../shared/models/session_data.dart';
 // the whole app without a restart.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Seeded demo history and recorded sessions merged, newest first.
+/// Recorded sessions, plus the seeded demo history while
+/// [showDemoHistoryProvider] is on, newest first.
 final sessionHistoryProvider = Provider<List<SessionData>>(
   (ref) => ref.watch(workoutRepositoryProvider).getAllSessions(),
+);
+
+/// Whether the history above includes the seeded demo year. Off by default.
+/// To switch it, call [WorkoutRepository.setShowDemoHistory], then invalidate
+/// this provider and [sessionHistoryProvider]. A screen showing history while
+/// this is on should say the data is sample data.
+final showDemoHistoryProvider = Provider<bool>(
+  (ref) => ref.watch(workoutRepositoryProvider).showDemoHistory,
 );
 
 /// Sessions bucketed by local midnight — one pass, so the per-day lookups the
