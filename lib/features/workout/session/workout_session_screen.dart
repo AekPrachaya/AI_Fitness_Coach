@@ -116,6 +116,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     final controller = CameraController(
       _cameras[index],
       ResolutionPreset.medium,
+      // Without a request iOS settled at 24 fps or lower indoors; detection
+      // takes ~20 ms a frame, so the camera, not ML Kit, set the frame rate.
+      fps: 30,
       // Must match what PoseDetectionService decodes: BGRA on iOS,
       // YUV 420 on Android. bgra8888 is not supported by the Android camera.
       // dart:io Platform throws on web, and camera_web ignores this field
