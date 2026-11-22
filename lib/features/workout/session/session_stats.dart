@@ -1,4 +1,5 @@
 import '../../../core/services/exercise_analyzer.dart';
+import '../../../core/services/rep_tempo.dart';
 
 /// Accumulates form grades across a workout so the finished session can be
 /// persisted with real numbers instead of zeros.
@@ -44,6 +45,23 @@ class SessionStats {
     _repWorst = null;
     _repIssues.clear();
   }
+
+  final List<RepTempo> _tempos = [];
+
+  /// Banks one rep's timing. Kept apart from [commitRep]: a rep can be
+  /// counted without a tempo (it began mid-descent) and timed without a grade.
+  void addTempo(RepTempo tempo) => _tempos.add(tempo);
+
+  /// Mean seconds from the top to the bottom of a rep, or 0 when no rep was
+  /// timed — the same "nothing measured" convention as [avgFormScore].
+  double get avgDescentSeconds => _mean([for (final t in _tempos) t.descentSeconds]);
+
+  /// Mean seconds from the bottom of a rep back to the top, or 0.
+  double get avgAscentSeconds => _mean([for (final t in _tempos) t.ascentSeconds]);
+
+  static double _mean(List<double> v) => v.isEmpty
+      ? 0
+      : double.parse((v.reduce((a, b) => a + b) / v.length).toStringAsFixed(2));
 
   /// Number of reps that carried a grade.
   int get gradedReps => _repScores.length;

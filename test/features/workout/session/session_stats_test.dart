@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_fitness_coach/core/services/exercise_analyzer.dart';
 import 'package:ai_fitness_coach/core/services/form_fault.dart';
+import 'package:ai_fitness_coach/core/services/rep_tempo.dart';
 import 'package:ai_fitness_coach/features/workout/session/session_stats.dart';
 
 void main() {
@@ -161,6 +162,33 @@ void main() {
             met: 5, weightKg: 0, durationSeconds: 600),
         0,
       );
+    });
+  });
+
+  group('tempo', () {
+    RepTempo tempo(int downMs, int upMs) => RepTempo(
+          descent: Duration(milliseconds: downMs),
+          ascent: Duration(milliseconds: upMs),
+        );
+
+    test('is zero when no rep was timed', () {
+      expect(stats.avgDescentSeconds, 0);
+      expect(stats.avgAscentSeconds, 0);
+    });
+
+    test('averages descent and ascent separately, to two decimals', () {
+      stats
+        ..addTempo(tempo(800, 600))
+        ..addTempo(tempo(1000, 700))
+        ..addTempo(tempo(700, 650));
+      expect(stats.avgDescentSeconds, 0.83);
+      expect(stats.avgAscentSeconds, 0.65);
+    });
+
+    test('does not depend on the reps being graded', () {
+      stats.addTempo(tempo(900, 600));
+      expect(stats.gradedReps, 0);
+      expect(stats.avgDescentSeconds, 0.9);
     });
   });
 }

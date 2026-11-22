@@ -81,6 +81,8 @@ class SessionData {
     required this.mostCommonError,
     required this.exercises,
     this.aiTip = '',
+    this.avgDescentSeconds = 0,
+    this.avgAscentSeconds = 0,
   });
 
   final String id;
@@ -98,6 +100,15 @@ class SessionData {
   /// recorded sessions save an empty string and the summary derives its own.
   final String aiTip;
 
+  /// Mean seconds per rep from the top down to the bottom, and back up.
+  /// Zero when no rep was timed — including every session recorded before
+  /// tempo was measured, and the seeded demo history.
+  final double avgDescentSeconds;
+  final double avgAscentSeconds;
+
+  /// Whether this session carries a measured tempo.
+  bool get hasTempo => avgDescentSeconds > 0 && avgAscentSeconds > 0;
+
   factory SessionData.fromJson(Map<String, dynamic> j) => SessionData(
         id: j['id'] as String,
         workoutId: j['workout_id'] as String,
@@ -112,6 +123,8 @@ class SessionData {
             .map((e) => ExerciseResult.fromJson(e as Map<String, dynamic>))
             .toList(),
         aiTip: j['ai_tip'] as String? ?? '',
+        avgDescentSeconds: (j['avg_descent_seconds'] as num?)?.toDouble() ?? 0,
+        avgAscentSeconds: (j['avg_ascent_seconds'] as num?)?.toDouble() ?? 0,
       );
 
   /// Parses either storage shape (raw Hive map or JSON string) without ever
@@ -142,6 +155,8 @@ class SessionData {
               .toList()
           : const [],
       aiTip: _asString(j['ai_tip']),
+      avgDescentSeconds: _asDouble(j['avg_descent_seconds']),
+      avgAscentSeconds: _asDouble(j['avg_ascent_seconds']),
     );
   }
 
@@ -157,5 +172,7 @@ class SessionData {
         'most_common_error': mostCommonError,
         'exercises': exercises.map((e) => e.toMap()).toList(),
         'ai_tip': aiTip,
+        'avg_descent_seconds': avgDescentSeconds,
+        'avg_ascent_seconds': avgAscentSeconds,
       };
 }

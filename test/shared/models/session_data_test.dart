@@ -50,4 +50,29 @@ void main() {
       expect(SessionData.tryParse(parsed.toMap())?.aiTip, parsed.aiTip);
     });
   });
+
+  group('tempo', () {
+    test('is absent from sessions recorded before it was measured', () {
+      final parsed = SessionData.tryParse(_row())!;
+      expect(parsed.avgDescentSeconds, 0);
+      expect(parsed.hasTempo, isFalse);
+      expect(SessionData.fromJson(_row()).hasTempo, isFalse);
+    });
+
+    test('is read from both storage shapes and survives a round trip', () {
+      final row = {
+        ..._row(),
+        'avg_descent_seconds': 0.86,
+        'avg_ascent_seconds': 0.7,
+      };
+      final fromString = SessionData.tryParse(jsonEncode(row))!;
+      final fromMap = SessionData.tryParse(Map<dynamic, dynamic>.from(row))!;
+      for (final s in [fromString, fromMap, SessionData.fromJson(row)]) {
+        expect(s.avgDescentSeconds, 0.86);
+        expect(s.avgAscentSeconds, 0.7);
+        expect(s.hasTempo, isTrue);
+      }
+      expect(SessionData.tryParse(fromString.toMap())!.avgAscentSeconds, 0.7);
+    });
+  });
 }
