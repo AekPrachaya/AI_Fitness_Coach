@@ -8,9 +8,9 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   /// [useFormModel] picks how posture is judged. Depth is a rule either way.
   ///
   /// * true — the trained form model (SquatFormClassifier) judges the back
-  ///   and the heels. On held-out people it caught 85% of bad-back and 100%
-  ///   of heel-lift images at [modelConfidence], where the rules below caught
-  ///   47% and 53%; the app had no heel check of its own.
+  ///   and the heels. On held-out people it caught 86% of bad-back and 100%
+  ///   of heel-lift images, warning on 2.6% of good ones, where the rules
+  ///   below caught 47% and 53%; the app had no heel check of its own.
   /// * false — the original angle rules: torso lean and knee-over-toe.
   ///
   /// Defaults to the `FORM_MODEL` dart-define (on unless set to false), so
@@ -47,11 +47,10 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   static const _shinForwardMax   = 40.0;
   static const _torsoLeanMax     = 55.0;
 
-  /// How sure the model must be before a fault is raised. At 0.5 it warned
-  /// on 12.6% of good-form test images; at 0.8, 8.7%, still catching 85% of
-  /// bad backs and every lifted heel. FormCoach's three-frame confirmation
-  /// filters further on top.
-  static const modelConfidence = 0.8;
+  /// How sure the model must be before a fault is raised: more likely than
+  /// not. Deliberately not tuned — the only images that could tune it are the
+  /// test set — and FormCoach's three-frame confirmation filters further.
+  static const modelConfidence = 0.5;
 
   @override
   FormResult analyze(Pose pose, double angle) {
