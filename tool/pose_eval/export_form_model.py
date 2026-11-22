@@ -62,7 +62,7 @@ abstract final class SquatFormModel {{
 
 
 # A side-on squat at the bottom, facing +x, in pixels: ear, shoulder, hip,
-# knee, ankle, heel, toe. The fixture jitters it rather than shipping real
+# knee, ankle, heel, toe (the nose is placed ahead of the ear). The fixture jitters it rather than shipping real
 # poses, so no one's skeleton (and nothing from a third-party dataset) ends up
 # in the repo — parity is about the arithmetic, which random poses test fine.
 TEMPLATE = {7: (520, 250), 11: (500, 300), 23: (450, 520), 25: (600, 560),
@@ -80,6 +80,8 @@ def random_pose(rng) -> np.ndarray:
             k = j + side
             lms[k, :2] = (x + rng.normal(0, 45), y + rng.normal(0, 45))
             lms[k, 3] = rng.uniform(0.7, 1.0) if side == near else rng.uniform(0.2, 0.9)
+    lms[0, :2] = (lms[7 + near, 0] + rng.uniform(20, 60), lms[7 + near, 1] + rng.normal(0, 10))
+    lms[0, 3] = rng.uniform(0.7, 1.0)
     if rng.random() < 0.5:  # facing the other way
         lms[:, 0] = 1000 - lms[:, 0]
     return lms

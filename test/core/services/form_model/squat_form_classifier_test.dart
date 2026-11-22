@@ -65,71 +65,87 @@ void main() {
   });
 
   group('on hand-built poses', () {
-    // Side-on squat bottom, facing right, image y growing downward.
-    List<PoseLandmark> squat({double heelY = 780, double shoulderX = 500,
-            double earX = 520, double earY = 250}) =>
-        [
-          lm(PoseLandmarkType.leftEar, earX, earY),
-          lm(PoseLandmarkType.leftShoulder, shoulderX, 300),
-          lm(PoseLandmarkType.leftHip, 450, 520),
-          lm(PoseLandmarkType.leftKnee, 600, 560),
-          lm(PoseLandmarkType.leftAnkle, 560, 760),
-          lm(PoseLandmarkType.leftHeel, 530, heelY),
-          lm(PoseLandmarkType.leftFootIndex, 640, 785),
+    // Side-on squat bottoms, facing right, image y growing downward: the
+    // median pose of each class in the training images, in pixels.
+    List<PoseLandmark> body(List<(double, double)> p) => [
+          lm(PoseLandmarkType.nose, p[0].$1 + 40, p[0].$2),
+          for (final (i, t) in const [
+            PoseLandmarkType.leftEar, PoseLandmarkType.leftShoulder,
+            PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee,
+            PoseLandmarkType.leftAnkle,
+          ].indexed)
+            lm(t, p[i].$1, p[i].$2),
         ];
+    final good = body(const [
+      (612, 255), (576, 334), (450, 520), (606, 547), (522, 696),
+    ]);
+    final bentOver = body(const [
+      (714, 381), (647, 421), (450, 520), (621, 566), (556, 729),
+    ]);
+    final liftedHeels = body(const [
+      (600, 260), (569, 329), (450, 520), (607, 553), (492, 681),
+    ]);
+
+    SquatFormPrediction predict(List<PoseLandmark> l) =>
+        SquatFormClassifier.predict(poseOf(l).landmarks)!;
 
     test('probabilities sum to one', () {
-      final p = SquatFormClassifier.predict(poseOf(squat()).landmarks)!;
-      expect(p.probabilities.fold(0.0, (a, b) => a + b), closeTo(1, 1e-9));
+      expect(predict(good).probabilities.fold(0.0, (a, b) => a + b),
+          closeTo(1, 1e-9));
     });
 
-    test('raising the heel moves the verdict toward bad heel', () {
-      final flat = SquatFormClassifier.predict(poseOf(squat()).landmarks)!;
-      final lifted =
-          SquatFormClassifier.predict(poseOf(squat(heelY: 730)).landmarks)!;
-      expect(
-        lifted.probabilityOf(SquatFormClass.badHeel),
-        greaterThan(flat.probabilityOf(SquatFormClass.badHeel)),
-      );
+    test('tells the three class medians apart', () {
+      expect(predict(good).best, SquatFormClass.good);
+      expect(predict(bentOver).best, SquatFormClass.badBack);
+      expect(predict(liftedHeels).best, SquatFormClass.badHeel);
     });
 
     test('mirroring the pose does not change the verdict', () {
-      final right = squat();
-      final left = [for (final l in right) lm(l.type, 1000 - l.x, l.y)];
-      final a = SquatFormClassifier.predict(poseOf(right).landmarks)!;
-      final b = SquatFormClassifier.predict(poseOf(left).landmarks)!;
+      final left = [for (final l in liftedHeels) lm(l.type, 1000 - l.x, l.y)];
+      final a = predict(liftedHeels), b = predict(left);
       for (var k = 0; k < 3; k++) {
         expect(b.probabilities[k], closeTo(a.probabilities[k], 1e-9));
       }
     });
 
     test('scaling the pose does not change the verdict', () {
-      final near = squat();
-      final far = [for (final l in near) lm(l.type, l.x / 2, l.y / 2)];
-      final a = SquatFormClassifier.predict(poseOf(near).landmarks)!;
-      final b = SquatFormClassifier.predict(poseOf(far).landmarks)!;
+      final far = [for (final l in liftedHeels) lm(l.type, l.x / 2, l.y / 2)];
+      final a = predict(liftedHeels), b = predict(far);
       for (var k = 0; k < 3; k++) {
         expect(b.probabilities[k], closeTo(a.probabilities[k], 1e-9));
       }
     });
 
-    test('refuses to judge feet it can only guess at', () {
-      // Feet slipping off the bottom of the frame: ML Kit still places them,
-      // at likelihoods around 0.6–0.75, and the positions are noise.
-      final guessedFeet = [
-        for (final l in squat())
-          l.type == PoseLandmarkType.leftHeel ||
-                  l.type == PoseLandmarkType.leftFootIndex
+    test('pays no attention to the feet', () {
+      // Heel and toe are where a high camera and a hidden far foot mislead;
+      // wherever they land, and however unsure ML Kit is of them, the
+      // verdict must not move.
+      final withFeet = [
+        ...good,
+        lm(PoseLandmarkType.leftHeel, 480, 600, likelihood: 0.3),
+        lm(PoseLandmarkType.leftFootIndex, 700, 760, likelihood: 0.3),
+      ];
+      final a = predict(good), b = predict(withFeet);
+      for (var k = 0; k < 3; k++) {
+        expect(b.probabilities[k], a.probabilities[k]);
+      }
+    });
+
+    test('refuses to judge a joint it can only guess at', () {
+      final guessedAnkle = [
+        for (final l in good)
+          l.type == PoseLandmarkType.leftAnkle
               ? lm(l.type, l.x, l.y, likelihood: 0.7)
               : l,
       ];
-      expect(FormFeatures.of(poseOf(guessedFeet).landmarks), isNotNull);
-      expect(SquatFormClassifier.predict(poseOf(guessedFeet).landmarks), isNull);
+      expect(FormFeatures.of(poseOf(guessedAnkle).landmarks), isNotNull);
+      expect(SquatFormClassifier.predict(poseOf(guessedAnkle).landmarks),
+          isNull);
     });
 
     test('refuses a pose with no side tracked', () {
       final blurry = [
-        for (final l in squat()) lm(l.type, l.x, l.y, likelihood: 0.3),
+        for (final l in good) lm(l.type, l.x, l.y, likelihood: 0.3),
       ];
       expect(SquatFormClassifier.predict(poseOf(blurry).landmarks), isNull);
     });

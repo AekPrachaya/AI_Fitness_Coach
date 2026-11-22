@@ -8,32 +8,34 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 /// two together or not at all.
 ///
 /// * the better-tracked side, as [ExerciseAnalyzer.bestSide] picks it
-/// * mirrored so the person always faces +x (toes point the way they face)
+/// * mirrored so the person always faces +x (the nose is ahead of the ear)
 /// * hip at the origin, lengths in units of that side's shoulder→hip, so
 ///   camera distance and body size drop out
 /// * the joint angles the rules use, plus a few they do not
+///
+/// No heel or toe: a phone propped high makes out-turned toes look lower
+/// than the heel, and side-on the far foot is placed at random behind the
+/// near one, so flat heels read as lifted. The shin and knee show a heel
+/// lift too, and the model caught every one on held-out images without them.
 abstract final class FormFeatures {
   static const minLikelihood = 0.65;
 
   /// Column order of [of]'s result. The model's weights are in this order.
   static const names = [
-    'ear_x', 'ear_y', 'shoulder_x', 'shoulder_y', 'knee_x', 'knee_y',
-    'ankle_x', 'ankle_y', 'heel_x', 'heel_y', 'toe_x', 'toe_y',
-    'knee_deg', 'hip_deg', 'torso_deg', 'shin_deg',
-    'ankle_deg', 'heel_deg', 'neck_deg', 'thigh_deg',
+    'ear_x', 'ear_y', 'shoulder_x', 'shoulder_y',
+    'knee_x', 'knee_y', 'ankle_x', 'ankle_y',
+    'knee_deg', 'hip_deg', 'torso_deg', 'shin_deg', 'neck_deg', 'thigh_deg',
   ];
 
   static const _left = [
     PoseLandmarkType.leftEar, PoseLandmarkType.leftShoulder,
     PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee,
-    PoseLandmarkType.leftAnkle, PoseLandmarkType.leftHeel,
-    PoseLandmarkType.leftFootIndex,
+    PoseLandmarkType.leftAnkle,
   ];
   static const _right = [
     PoseLandmarkType.rightEar, PoseLandmarkType.rightShoulder,
     PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee,
-    PoseLandmarkType.rightAnkle, PoseLandmarkType.rightHeel,
-    PoseLandmarkType.rightFootIndex,
+    PoseLandmarkType.rightAnkle,
   ];
 
   /// Indices into [_left]/[_right] of the joints a side must track well:
@@ -44,47 +46,44 @@ abstract final class FormFeatures {
   /// trust — the same frames the rule checks skip.
   static List<double>? of(Map<PoseLandmarkType, PoseLandmark> lms) {
     final side = _pickSide(lms);
-    if (side == null) return null;
+    final nose = lms[PoseLandmarkType.nose];
+    if (side == null || nose == null) return null;
     final p = [for (final t in side) lms[t]];
     if (p.any((l) => l == null)) return null;
-    final ear = p[0]!, sh = p[1]!, hip = p[2]!, kn = p[3]!,
-        an = p[4]!, he = p[5]!, to = p[6]!;
+    final ear = p[0]!, sh = p[1]!, hip = p[2]!, kn = p[3]!, an = p[4]!;
 
     final torso = _dist(sh.x, sh.y, hip.x, hip.y);
     if (torso < 1e-6) return null;
-    final facing = to.x >= he.x ? 1.0 : -1.0;
+    final facing = nose.x >= ear.x ? 1.0 : -1.0;
 
     // (x, y) relative to the hip, mirrored and in torso lengths.
     (double, double) rel(PoseLandmark l) =>
         ((l.x - hip.x) * facing / torso, (l.y - hip.y) / torso);
 
-    final e = rel(ear), s = rel(sh), k = rel(kn), a = rel(an),
-        h = rel(he), t = rel(to);
+    final e = rel(ear), s = rel(sh), k = rel(kn), a = rel(an);
     const o = (0.0, 0.0);
 
-    final heelLift = _deg(math.atan2(t.$2 - h.$2, _nz((t.$1 - h.$1).abs())));
     final thigh = _deg(math.atan2(k.$2 - o.$2, _nz((k.$1 - o.$1).abs())));
 
     return [
-      e.$1, e.$2, s.$1, s.$2, k.$1, k.$2,
-      a.$1, a.$2, h.$1, h.$2, t.$1, t.$2,
+      e.$1, e.$2, s.$1, s.$2, k.$1, k.$2, a.$1, a.$2,
       _angle(o, k, a),
       _angle(s, o, k),
       _fromVertical(s, o),
       _fromVertical(k, a),
-      _angle(k, a, t),
-      heelLift,
       _angle(e, s, o),
       thigh,
     ];
   }
 
-  /// The seven joints, ear to toe, of the side [of] would read — or null when
-  /// neither side is tracked well enough.
-  static List<PoseLandmarkType>? sideUsed(
+  /// Every joint [of] reads for the side it would use — nose, then ear to
+  /// ankle — or null when neither side is tracked well enough.
+  static List<PoseLandmarkType>? jointsUsed(
     Map<PoseLandmarkType, PoseLandmark> lms,
-  ) =>
-      _pickSide(lms);
+  ) {
+    final side = _pickSide(lms);
+    return side == null ? null : [PoseLandmarkType.nose, ...side];
+  }
 
   static List<PoseLandmarkType>? _pickSide(
     Map<PoseLandmarkType, PoseLandmark> lms,

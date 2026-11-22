@@ -145,22 +145,25 @@ void main() {
     final model = SquatAnalyzer(useFormModel: true);
 
     // Whole side-on bodies at the bottom of a squat, facing right: the
-    // median pose of each class in the training images, in pixels. A heel
-    // lift is more than a raised heel — the ankle rises and the foot sits
-    // further back under the hip — and the model reads the whole shape.
+    // median pose of each class in the training images, in pixels.
     Pose body(List<(double, double)> p) => poseOf(withMirroredSide([
+          lm(PoseLandmarkType.nose, p[0].$1 + 40, p[0].$2),
           for (final (i, t) in const [
             PoseLandmarkType.leftEar, PoseLandmarkType.leftShoulder,
             PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee,
-            PoseLandmarkType.leftAnkle, PoseLandmarkType.leftHeel,
-            PoseLandmarkType.leftFootIndex,
+            PoseLandmarkType.leftAnkle,
           ].indexed)
             lm(t, p[i].$1, p[i].$2),
         ]));
-    final good = body(const [(612, 254), (576, 333), (450, 520), (605, 547),
-        (522, 696), (495, 725), (596, 725)]);
-    final liftedHeels = body(const [(598, 259), (569, 329), (450, 520),
-        (608, 554), (493, 682), (464, 698), (540, 736)]);
+    final good = body(const [
+      (612, 255), (576, 334), (450, 520), (606, 547), (522, 696),
+    ]);
+    final bentOver = body(const [
+      (714, 381), (647, 421), (450, 520), (621, 566), (556, 729),
+    ]);
+    final liftedHeels = body(const [
+      (600, 260), (569, 329), (450, 520), (607, 553), (492, 681),
+    ]);
 
     test('still grades depth by rule', () {
       final result = model.analyze(good, 110);
@@ -179,6 +182,10 @@ void main() {
       expect(model.analyze(liftedHeels, 85).faults, [FormFault.squatHeelLift]);
     });
 
+    test('flags a back folded over', () {
+      expect(model.analyze(bentOver, 85).faults, [FormFault.squatTorsoLean]);
+    });
+
     test('falls back to the rules when it cannot see the whole leg', () {
       // No ear, heel or toe: the model must not guess, but the rules need
       // only shoulder, hip, knee and ankle and still catch what they can.
@@ -186,22 +193,6 @@ void main() {
       expect(result.faults,
           containsAll([FormFault.squatTorsoLean, FormFault.squatKneeOverToe]));
       expect(result.faults, isNot(contains(FormFault.squatHeelLift)));
-    });
-
-    test('does not call heels lifted when the feet are only guessed', () {
-      final guessed = Pose(landmarks: {
-        for (final e in liftedHeels.landmarks.entries)
-          e.key: switch (e.key) {
-            PoseLandmarkType.leftHeel ||
-            PoseLandmarkType.rightHeel ||
-            PoseLandmarkType.leftFootIndex ||
-            PoseLandmarkType.rightFootIndex =>
-              lm(e.key, e.value.x, e.value.y, likelihood: 0.7),
-            _ => e.value,
-          },
-      });
-      expect(model.analyze(guessed, 85).faults,
-          isNot(contains(FormFault.squatHeelLift)));
     });
 
     test('never raises the knee-over-toe rule it replaces', () {
