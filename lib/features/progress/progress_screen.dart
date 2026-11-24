@@ -4,15 +4,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import 'widgets/activity_heatmap.dart';
-import 'widgets/coming_soon_tab.dart';
 import 'widgets/exercise_stats_section.dart';
 import 'widgets/form_progress_chart.dart';
+import 'widgets/history_tab.dart';
 import 'widgets/streak_card.dart';
 import 'widgets/this_week_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProgressScreen — Overview | History | Body Metrics.
-// Only Overview is built (Tasks 5.1/5.2); the other two arrive in 5.3/5.4.
+// ProgressScreen — Overview | History.
+// Body Metrics (Task 5.4) is hidden until there is real data to show.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ProgressScreen extends StatefulWidget {
@@ -29,7 +29,7 @@ class _ProgressScreenState extends State<ProgressScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -58,16 +58,7 @@ class _ProgressScreenState extends State<ProgressScreen>
         controller: _tabController,
         children: const [
           _OverviewTab(),
-          ComingSoonTab(
-            icon: Icons.history_rounded,
-            title: 'Workout History',
-            message: 'Your session-by-session log will live here.',
-          ),
-          ComingSoonTab(
-            icon: Icons.monitor_weight_outlined,
-            title: 'Body Metrics',
-            message: 'Weight and BMI tracking will live here.',
-          ),
+          HistoryTab(),
         ],
       ),
     );
@@ -107,7 +98,6 @@ class _ProgressTabBar extends StatelessWidget implements PreferredSizeWidget {
         tabs: const [
           Tab(text: 'Overview'),
           Tab(text: 'History'),
-          Tab(text: 'Body Metrics'),
         ],
       ),
     );
