@@ -179,7 +179,7 @@ class _SessionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  hasScore ? '${score.round()}%' : '--',
+                  hasScore ? '${score.toInt()}%' : '--',
                   style: tt.displaySmall?.copyWith(
                     color: hasScore
                         ? AppColors.formScoreColor(score)
