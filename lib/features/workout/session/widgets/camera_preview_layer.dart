@@ -122,6 +122,7 @@ class _CameraPreviewLayerState extends State<CameraPreviewLayer>
         description,
         widget.resolution,
         enableAudio: false,
+        fps: 30,
         imageFormatGroup: _imageFormatGroup(),
       );
 

@@ -90,6 +90,17 @@ void main() {
     expect(failed.copyWith(status: SessionStatus.tracking).errorMessage, isNull);
   });
 
+  test('a rest starts at the default length, and copyWith keeps its total',
+      () {
+    const state = WorkoutSessionState();
+    expect(state.restSecondsLeft, WorkoutSessionState.defaultRestSeconds);
+    expect(state.restTotalSeconds, WorkoutSessionState.defaultRestSeconds);
+
+    final stretched =
+        state.copyWith(restSecondsLeft: 70, restTotalSeconds: 90);
+    expect(stretched.copyWith(restSecondsLeft: 69).restTotalSeconds, 90);
+  });
+
   group('repsDone', () {
     WorkoutSessionState at(SessionStatus status) => WorkoutSessionState(
           status: status,

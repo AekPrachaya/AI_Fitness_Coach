@@ -8,10 +8,12 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/form_alerts.dart';
 import '../../../core/services/form_coach.dart';
 import '../../../core/services/form_speech.dart';
+import '../../../core/services/landmark_smoother.dart';
 import '../../../core/services/movement_tracker.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
 import '../../../core/utils/angle_calculator.dart';
+import 'rest_adjust.dart' as rest;
 import 'session_clock.dart';
 import 'session_stats.dart';
 import 'tracking_watchdog.dart';
@@ -31,6 +33,9 @@ enum SessionStatus {
 }
 
 class WorkoutSessionState {
+  /// Rest between sets, until rest length becomes a user preference.
+  static const defaultRestSeconds = 60;
+
   const WorkoutSessionState({
     this.status = SessionStatus.idle,
     this.currentSet = 1,
@@ -38,7 +43,8 @@ class WorkoutSessionState {
     this.targetReps = 10,
     this.repCount = 0,
     this.totalReps = 0,
-    this.restSecondsLeft = 60,
+    this.restSecondsLeft = defaultRestSeconds,
+    this.restTotalSeconds = defaultRestSeconds,
     this.jointAngle,
     this.angleLabel = 'องศา',
     this.formResult,
@@ -58,6 +64,10 @@ class WorkoutSessionState {
   final int repCount;
   final int totalReps;
   final int restSecondsLeft;
+
+  /// Full length of the current rest, adjustments included — what the
+  /// countdown ring measures [restSecondsLeft] against.
+  final int restTotalSeconds;
   final double? jointAngle;
   final String angleLabel;
   final FormResult? formResult;
@@ -101,6 +111,7 @@ class WorkoutSessionState {
     int? repCount,
     int? totalReps,
     int? restSecondsLeft,
+    int? restTotalSeconds,
     double? jointAngle,
     String? angleLabel,
     FormResult? formResult,
@@ -125,6 +136,7 @@ class WorkoutSessionState {
       repCount: repCount ?? this.repCount,
       totalReps: totalReps ?? this.totalReps,
       restSecondsLeft: restSecondsLeft ?? this.restSecondsLeft,
+      restTotalSeconds: restTotalSeconds ?? this.restTotalSeconds,
       jointAngle: clearJointAngle ? null : (jointAngle ?? this.jointAngle),
       angleLabel: angleLabel ?? this.angleLabel,
       formResult: clearFormResult ? null : (formResult ?? this.formResult),
@@ -166,7 +178,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final ExerciseAnalyzer _analyzer;
   final FormAlerts _alerts;
   final _coach = FormCoach();
-  final _movement = MovementTracker();
+  late final _movement = MovementTracker(rearmAbove: _analyzer.upThreshold);
+  final _smoother = LandmarkSmoother();
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();
@@ -187,6 +200,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   /// duration is settled from. Read by the HUD timer, which polls it; the
   /// state's `elapsedSeconds` is only filled in once the session finishes.
   int get liveElapsedSeconds => _clock.elapsedSeconds;
+
+  /// Mean form grade over the reps graded so far, 0–100 — the HUD's live
+  /// FORM readout. Zero until a rep has been graded. The state's
+  /// `avgFormScore` is only filled in once the session finishes.
+  double get liveFormScore => _stats.avgFormScore;
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -214,7 +232,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void processFrame(CameraImage image, CameraDescription camera) async {
     // Error keeps processing: it is how the session notices the body is back.
+    // So does the repComplete flash: it lasts 600 ms after every counted rep,
+    // and skipping frames through it froze the skeleton and blinded the
+    // tracker for about a quarter of every set.
     if (state.status != SessionStatus.tracking &&
+        state.status != SessionStatus.repComplete &&
         state.status != SessionStatus.error) {
       return;
     }
@@ -228,6 +250,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _applyTracking(TrackingLoss.noBody);
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       state = state.copyWith(
         poses: [],
         clearJointAngle: true,
@@ -240,6 +263,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     final lms = poses.first.landmarks;
+    // What is drawn is smoothed; everything measured below reads the raw pose.
+    final shown = [_smoother.smooth(poses.first, DateTime.now())];
     final joints = ExerciseAnalyzer.bestSide(
       lms,
       [_analyzer.primaryA, _analyzer.primaryB, _analyzer.primaryC],
@@ -278,13 +303,20 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     // measured from the wrong side is not a smaller truth, it is a different
     // number, and counting reps off it would inflate the session.
     if (joints case [final a, final b, final c] when loss == null) {
-      if (state.status != SessionStatus.tracking) return;
+      if (state.status != SessionStatus.tracking &&
+          state.status != SessionStatus.repComplete) {
+        return;
+      }
       angle = calculateAngle(a, b, c);
       _movement.update(angle);
       // Faults the current point in the rep cannot judge are dropped before
       // anything sees them — the live cue and the session tally alike.
+      // At the turnaround the angle is already on its way back up; depth is
+      // how low the rep went, so that frame is judged at the low point.
+      final judged =
+          _movement.bottomedOut ? _movement.bottomAngle! : angle;
       form = _analyzer
-          .analyze(poses.first, angle)
+          .analyze(poses.first, judged)
           .judgeableNow(bottomedOut: _movement.bottomedOut);
       _stats.observe(form);
       _coachOn(form);
@@ -300,7 +332,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         state = state.copyWith(
           repCount: newCount,
           status: SessionStatus.repComplete,
-          poses: poses,
+          poses: shown,
           jointAngle: angle,
           formResult: form,
           cue: _coach.cue,
@@ -318,7 +350,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     state = state.copyWith(
-      poses: poses,
+      poses: shown,
       jointAngle: angle,
       clearJointAngle: angle == null,
       formResult: form,
@@ -371,6 +403,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _repCounter.abandonRep();
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       _alerts.silence();
       state = state.copyWith(
         status: SessionStatus.paused,
@@ -386,6 +419,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _watchdog.reset();
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -395,6 +429,27 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _restTimer?.cancel();
       _startNextSet();
     }
+  }
+
+  /// Lengthens or shortens the rest from the rest screen's +/− buttons.
+  ///
+  /// The running rest timer reads [WorkoutSessionState.restSecondsLeft] on
+  /// every tick, so it simply carries on from the new value. Cutting the rest
+  /// to nothing starts the next set, exactly like skipping.
+  void adjustRest(int deltaSeconds) {
+    if (state.status != SessionStatus.resting) return;
+    final next = rest.adjustRest(
+      (left: state.restSecondsLeft, total: state.restTotalSeconds),
+      deltaSeconds,
+    );
+    if (next == null) {
+      skipRest();
+      return;
+    }
+    state = state.copyWith(
+      restSecondsLeft: next.left,
+      restTotalSeconds: next.total,
+    );
   }
 
   void endSession() {
@@ -419,6 +474,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _watchdog.reset();
     _coach.reset();
     _movement.reset();
+    _smoother.reset();
     _alerts.silence();
 
     final setReps = _repCounter.count;
@@ -439,7 +495,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
     state = state.copyWith(
       status: SessionStatus.resting,
-      restSecondsLeft: 60,
+      restSecondsLeft: WorkoutSessionState.defaultRestSeconds,
+      restTotalSeconds: WorkoutSessionState.defaultRestSeconds,
     );
     _startRestTimer();
   }
@@ -470,11 +527,13 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _watchdog.reset();
     _coach.reset();
     _movement.reset();
+    _smoother.reset();
     state = state.copyWith(
       status: SessionStatus.tracking,
       currentSet: state.currentSet + 1,
       repCount: 0,
-      restSecondsLeft: 60,
+      restSecondsLeft: WorkoutSessionState.defaultRestSeconds,
+      restTotalSeconds: WorkoutSessionState.defaultRestSeconds,
       clearCue: true,
     );
   }
