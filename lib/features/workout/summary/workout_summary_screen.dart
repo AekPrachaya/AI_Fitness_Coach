@@ -433,15 +433,21 @@ class _Actions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppPrimaryButton(
-          label: 'Done',
-          leadingIcon: Icons.check_rounded,
-          onTap: () => context.go(RouteNames.home),
+          label: 'Next Exercise',
+          leadingIcon: Icons.arrow_forward_rounded,
+          onTap: () =>
+              context.go(RouteNames.exerciseTransitionPath(workoutId)),
         ),
         const SizedBox(height: AppSpacing.md),
         AppSecondaryButton(
           label: 'Do It Again',
           leadingIcon: Icons.replay_rounded,
           onTap: () => context.go(RouteNames.preWorkoutPath(workoutId)),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppGhostButton(
+          label: 'Done',
+          onTap: () => context.go(RouteNames.home),
         ),
       ],
     );
