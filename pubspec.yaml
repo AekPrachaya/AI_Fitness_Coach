@@ -39,6 +39,7 @@ dependencies:
   # Permissions
   permission_handler: ^11.0.0
   flutter_tts: ^4.2.5
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +54,7 @@ flutter:
     - assets/data/
     - assets/fonts/
     - assets/animations/
+    - assets/sounds/
 
   fonts:
     - family: BebasNeue

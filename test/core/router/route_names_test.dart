@@ -61,4 +61,10 @@ void main() {
       expect(uri.queryParameters['session'], 'a b&c');
     });
   });
+
+  test('exerciseTransitionPath points at the up-next screen of an exercise',
+      () {
+    expect(RouteNames.exerciseTransitionPath('squats'), '/workout/squats/next');
+    expect(RouteNames.exerciseTransition, '/workout/:id/next');
+  });
 }
