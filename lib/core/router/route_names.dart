@@ -21,6 +21,7 @@ abstract class RouteNames {
   static const String preWorkout             = '/workout/:id/pre';
   static const String session                = '/workout/:id/session';
   static const String workoutSummary         = '/workout/:id/summary';
+  static const String exerciseTransition     = '/workout/:id/next';
 
   // ── Progress sub-routes ────────────────────────────────────────────────────
   static const String progressHistory        = '/progress/history';
@@ -33,6 +34,8 @@ abstract class RouteNames {
   static String workoutDetailPath(String id)  => '/workout/$id';
   static String preWorkoutPath(String id)     => '/workout/$id/pre';
   static String sessionPath(String id)        => '/workout/$id/session';
+  /// The "up next" screen shown after finishing the exercise [id].
+  static String exerciseTransitionPath(String id) => '/workout/$id/next';
   /// Without [sessionId] the summary shows the newest session for [id];
   /// with one (a replay from History) it shows that exact session.
   static String workoutSummaryPath(String id, {String? sessionId}) =>

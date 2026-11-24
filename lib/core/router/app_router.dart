@@ -24,6 +24,7 @@ import '../../features/workout/detail/workout_detail_screen.dart';
 import '../../features/workout/session/pre_workout_screen.dart';
 import '../../features/workout/session/workout_session_screen.dart';
 import '../../features/workout/summary/workout_summary_screen.dart';
+import '../../features/workout/transition/exercise_transition_screen.dart';
 import '../../features/progress/progress_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -162,6 +163,15 @@ final routerProvider = Provider<GoRouter>((ref) {
                       child: WorkoutSummaryScreen(
                         workoutId: state.pathParameters['id']!,
                         sessionId: state.uri.queryParameters['session'],
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'next',
+                    pageBuilder: (context, state) => _fadePage(
+                      key: state.pageKey,
+                      child: ExerciseTransitionScreen(
+                        workoutId: state.pathParameters['id']!,
                       ),
                     ),
                   ),

@@ -62,7 +62,7 @@ class AppShell extends StatelessWidget {
   }
 
   bool _shouldShowNavBar(String location) {
-    const hideOn = ['/session', '/pre', '/summary'];
+    const hideOn = ['/session', '/pre', '/summary', '/next'];
     return !hideOn.any((suffix) => location.contains(suffix));
   }
 
