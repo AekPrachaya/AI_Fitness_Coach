@@ -8,6 +8,7 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/services/form_alerts.dart';
 import '../../../core/services/form_coach.dart';
 import '../../../core/services/form_speech.dart';
+import '../../../core/services/landmark_smoother.dart';
 import '../../../core/services/movement_tracker.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
@@ -165,6 +166,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final FormAlerts _alerts;
   final _coach = FormCoach();
   late final _movement = MovementTracker(rearmAbove: _analyzer.upThreshold);
+  final _smoother = LandmarkSmoother();
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();
@@ -217,7 +219,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
 
   void processFrame(CameraImage image, CameraDescription camera) async {
     // Error keeps processing: it is how the session notices the body is back.
+    // So does the repComplete flash: it lasts 600 ms after every counted rep,
+    // and skipping frames through it froze the skeleton and blinded the
+    // tracker for about a quarter of every set.
     if (state.status != SessionStatus.tracking &&
+        state.status != SessionStatus.repComplete &&
         state.status != SessionStatus.error) {
       return;
     }
@@ -231,6 +237,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _applyTracking(TrackingLoss.noBody);
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       state = state.copyWith(
         poses: [],
         clearJointAngle: true,
@@ -243,6 +250,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     final lms = poses.first.landmarks;
+    // What is drawn is smoothed; everything measured below reads the raw pose.
+    final shown = [_smoother.smooth(poses.first, DateTime.now())];
     final joints = ExerciseAnalyzer.bestSide(
       lms,
       [_analyzer.primaryA, _analyzer.primaryB, _analyzer.primaryC],
@@ -281,7 +290,10 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     // measured from the wrong side is not a smaller truth, it is a different
     // number, and counting reps off it would inflate the session.
     if (joints case [final a, final b, final c] when loss == null) {
-      if (state.status != SessionStatus.tracking) return;
+      if (state.status != SessionStatus.tracking &&
+          state.status != SessionStatus.repComplete) {
+        return;
+      }
       angle = calculateAngle(a, b, c);
       _movement.update(angle);
       // Faults the current point in the rep cannot judge are dropped before
@@ -307,7 +319,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
         state = state.copyWith(
           repCount: newCount,
           status: SessionStatus.repComplete,
-          poses: poses,
+          poses: shown,
           jointAngle: angle,
           formResult: form,
           cue: _coach.cue,
@@ -325,7 +337,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     }
 
     state = state.copyWith(
-      poses: poses,
+      poses: shown,
       jointAngle: angle,
       clearJointAngle: angle == null,
       formResult: form,
@@ -378,6 +390,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _repCounter.abandonRep();
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       _alerts.silence();
       state = state.copyWith(
         status: SessionStatus.paused,
@@ -393,6 +406,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _watchdog.reset();
       _coach.reset();
       _movement.reset();
+      _smoother.reset();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -442,6 +456,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _watchdog.reset();
     _coach.reset();
     _movement.reset();
+    _smoother.reset();
     _alerts.silence();
 
     final setReps = _repCounter.count;
@@ -494,6 +509,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _watchdog.reset();
     _coach.reset();
     _movement.reset();
+    _smoother.reset();
     state = state.copyWith(
       status: SessionStatus.tracking,
       currentSet: state.currentSet + 1,
