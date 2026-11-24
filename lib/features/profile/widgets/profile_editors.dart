@@ -16,6 +16,8 @@ import '../profile_options.dart';
 Future<T?> _showSheet<T>(BuildContext context, WidgetBuilder builder) {
   return showModalBottomSheet<T>(
     context: context,
+    // Above the shell's nav bar, not under it.
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: AppColors.surfaceElevated,
