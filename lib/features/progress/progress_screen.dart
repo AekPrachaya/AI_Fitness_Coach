@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../shared/widgets/demo_data_badge.dart';
 import 'widgets/activity_heatmap.dart';
 import 'widgets/exercise_stats_section.dart';
 import 'widgets/form_progress_chart.dart';
@@ -50,6 +51,10 @@ class _ProgressScreenState extends State<ProgressScreen>
         centerTitle: false,
         titleSpacing: AppSpacing.lg,
         title: Text('Progress', style: tt.headlineMedium),
+        actions: const [
+          Center(child: DemoDataBadge()),
+          SizedBox(width: AppSpacing.lg),
+        ],
         bottom: _ProgressTabBar(controller: _tabController),
       ),
       // A TabBarView rather than the detail screen's AnimatedSwitcher: these are
