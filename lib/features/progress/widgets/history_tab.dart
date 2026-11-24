@@ -41,14 +41,11 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
   @override
   Widget build(BuildContext context) {
     final sessions = ref.watch(sessionHistoryProvider);
-    final isDemo = ref.watch(showDemoHistoryProvider);
 
     if (sessions.isEmpty) return const _EmptyHistory();
 
     final items = buildHistoryItems(sessions, now: DateTime.now());
     final animate = !MediaQuery.disableAnimationsOf(context);
-    // The sample-data note, when shown, sits above the first day header.
-    final offset = isDemo ? 1 : 0;
 
     return ListView.builder(
       // Bottom padding clears the shell's nav bar.
@@ -58,21 +55,16 @@ class _HistoryTabState extends ConsumerState<HistoryTab> {
         AppSpacing.lg,
         AppSpacing.xxl,
       ),
-      itemCount: items.length + offset,
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        final Widget child;
-        if (index < offset) {
-          child = const _SampleDataNote();
-        } else {
-          final item = items[index - offset];
-          child = switch (item) {
-            HistoryDayHeader() => _DayHeader(
-              label: item.label,
-              isFirst: index == offset,
-            ),
-            HistorySessionItem() => _SessionRow(session: item.session),
-          };
-        }
+        final item = items[index];
+        final Widget child = switch (item) {
+          HistoryDayHeader() => _DayHeader(
+            label: item.label,
+            isFirst: index == 0,
+          ),
+          HistorySessionItem() => _SessionRow(session: item.session),
+        };
 
         if (!animate || index >= _animatedItems || !_withinEntryWindow) {
           return child;
@@ -191,37 +183,6 @@ class _SessionRow extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Sample-data note ─────────────────────────────────────────────────────────
-
-class _SampleDataNote extends StatelessWidget {
-  const _SampleDataNote();
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            size: 16,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'Includes sample data from Demo mode.',
-              style: tt.bodySmall,
-            ),
-          ),
-        ],
       ),
     );
   }
