@@ -27,7 +27,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sweep_thresholds import SIDE_MAX_RATIO, Frame, load_frames  # noqa: E402
+from sweep_thresholds import FRAMES_BELOW_TO_ARM, SIDE_MAX_RATIO, Frame, load_frames  # noqa: E402
 
 # Highest priority first, as FormFault.byPriority orders them for the cue.
 TORSO, KNEE, SHALLOW = "torso_lean", "knee_over_toe", "shallow"
@@ -98,7 +98,7 @@ def analyze(angle, shin, torso, args) -> list[str] | None:
 def replay(frames: list[Frame], rows: list[dict], args) -> list[dict]:
     reps = []
     movement = MovementTracker(rise=args.rise, rearm_above=None if args.no_rearm else args.up)
-    waiting_down, standing = True, None
+    waiting_down, standing, below_run = True, None, 0
     candidate, candidate_frames = None, 0
     rep = None
 
@@ -153,9 +153,11 @@ def replay(frames: list[Frame], rows: list[dict], args) -> list[dict]:
             rep["cue"].add(top)
 
         # RepCounter closes the rep on the same frame.
-        if waiting_down and angle < args.down - args.hysteresis:
-            waiting_down = False
-        elif not waiting_down and angle > args.up + args.hysteresis:
+        if waiting_down:
+            below_run = below_run + 1 if angle < args.down - args.hysteresis else 0
+            if below_run >= FRAMES_BELOW_TO_ARM:
+                waiting_down, below_run = False, 0
+        elif angle > args.up + args.hysteresis:
             waiting_down = True
             if rep["graded"]:
                 reps.append(rep)

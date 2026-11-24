@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sweep_thresholds import SIDE_MAX_RATIO, Frame, count_reps, load_frames  # noqa: E402
+from sweep_thresholds import FRAMES_BELOW_TO_ARM, SIDE_MAX_RATIO, Frame, count_reps, load_frames  # noqa: E402
 
 
 def times(out: Path, stem: str) -> list[float]:
@@ -69,7 +69,7 @@ def visible(frames: list[Frame], up: float, gate_front: bool) -> list[bool]:
 def reps_with_timing(frames, ts, down, up, hyst, gate_front):
     """Each counted rep: (start of descent, time of low point, low angle)."""
     ok = visible(frames, up, gate_front)
-    reps, waiting_down, start, low, low_t = [], True, None, None, None
+    reps, waiting_down, start, low, low_t, run = [], True, None, None, None, 0
     for f, t, v in zip(frames, ts, ok):
         if not v:
             continue
@@ -77,8 +77,11 @@ def reps_with_timing(frames, ts, down, up, hyst, gate_front):
         if waiting_down and a > up:
             start = t  # last frame at the top before going down
         if waiting_down:
-            if a < down - hyst:
-                waiting_down, low, low_t = False, a, t
+            run = run + 1 if a < down - hyst else 0
+            if run == 1 or (run and a < low):
+                low, low_t = a, t
+            if run >= FRAMES_BELOW_TO_ARM:
+                waiting_down, run = False, 0
         else:
             if a < low:
                 low, low_t = a, t

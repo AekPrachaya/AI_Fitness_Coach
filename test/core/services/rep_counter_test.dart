@@ -3,10 +3,12 @@ import 'package:ai_fitness_coach/core/services/rep_counter.dart';
 
 void main() {
   // Defaults: down < 100, up > 160, hysteresis 8 — so the angle must actually
-  // cross 92 on the way down and 168 on the way up.
+  // cross 92 on the way down and 168 on the way up. These groups are about
+  // the thresholds and abandonRep, so they arm on a single frame below the
+  // line; the glitch guard has its own group at the end.
   group('with default thresholds', () {
     late RepCounter counter;
-    setUp(() => counter = RepCounter());
+    setUp(() => counter = RepCounter(framesBelowToArm: 1));
 
     test('starts at zero and does not count a lone descent', () {
       expect(counter.count, 0);
@@ -71,7 +73,8 @@ void main() {
 
   test('honours per-exercise thresholds', () {
     // Bicep curl range: down < 50, up > 150.
-    final counter = RepCounter(downThreshold: 50, upThreshold: 150);
+    final counter =
+        RepCounter(downThreshold: 50, upThreshold: 150, framesBelowToArm: 1);
     counter.update(70); // not deep enough for a curl
     counter.update(160);
     expect(counter.count, 0);
@@ -86,6 +89,7 @@ void main() {
       downThreshold: 100,
       upThreshold: 160,
       hysteresis: 20,
+      framesBelowToArm: 1,
     );
     strict.update(85); // above 100 - 20, so the descent is not registered
     strict.update(175);
@@ -102,7 +106,7 @@ void main() {
     // is exactly what the first frame after an interruption hands it.
     test('a rep interrupted at the bottom is not completed by standing up',
         () {
-      final counter = RepCounter();
+      final counter = RepCounter(framesBelowToArm: 1);
       counter.update(150);
       counter.update(80); // down
       counter.abandonRep(); // phone call, lost tracking, pause
@@ -112,7 +116,7 @@ void main() {
     });
 
     test('keeps the reps already earned', () {
-      final counter = RepCounter();
+      final counter = RepCounter(framesBelowToArm: 1);
       counter.update(150);
       counter.update(80);
       counter.update(175); // a real rep
@@ -125,7 +129,7 @@ void main() {
     });
 
     test('the next honest rep still counts', () {
-      final counter = RepCounter();
+      final counter = RepCounter(framesBelowToArm: 1);
       counter.update(80);
       counter.abandonRep();
 
@@ -136,7 +140,7 @@ void main() {
     });
 
     test('abandoning between reps changes nothing', () {
-      final counter = RepCounter();
+      final counter = RepCounter(framesBelowToArm: 1);
       counter.update(175);
       counter.abandonRep();
       counter.update(80);
@@ -145,7 +149,7 @@ void main() {
     });
 
     test('abandoning repeatedly is harmless', () {
-      final counter = RepCounter();
+      final counter = RepCounter(framesBelowToArm: 1);
       counter.update(80);
       for (var i = 0; i < 5; i++) {
         counter.abandonRep();
@@ -153,6 +157,48 @@ void main() {
       counter.update(80);
       expect(counter.update(175), isTrue, reason: 'a fresh rep after the mess');
       expect(counter.count, 1);
+    });
+  });
+
+  group('one-frame glitches', () {
+    // Default guard: two consecutive frames below the line.
+    late RepCounter counter;
+    setUp(() => counter = RepCounter());
+
+    test('a single wild frame does not arm a rep', () {
+      // Shirt against the lens while the phone is being set up: one frame
+      // reads as a 7° knee, then tracking settles back to standing.
+      for (final a in [172, 171, 7, 170, 173]) {
+        expect(counter.update(a.toDouble()), isFalse);
+      }
+      expect(counter.count, 0);
+    });
+
+    test('a real descent, however quick, still counts', () {
+      for (final a in [172, 140, 110, 88, 85, 110, 150, 175]) {
+        counter.update(a.toDouble());
+      }
+      expect(counter.count, 1);
+    });
+
+    test('the frames below must be consecutive', () {
+      for (final a in [172, 80, 120, 80, 120, 175]) {
+        counter.update(a.toDouble());
+      }
+      expect(counter.count, 0);
+    });
+
+    test('reset and abandonRep forget a half-armed descent', () {
+      counter.update(80);
+      counter.reset();
+      counter.update(80);
+      expect(counter.update(175), isFalse);
+
+      counter.update(80);
+      counter.abandonRep();
+      counter.update(80);
+      expect(counter.update(175), isFalse);
+      expect(counter.count, 0);
     });
   });
 }

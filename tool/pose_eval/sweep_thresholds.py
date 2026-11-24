@@ -34,6 +34,9 @@ import numpy as np
 
 MIN_LIKELIHOOD = 0.65
 SIDE_MAX_RATIO = 0.35  # BodyView.sideMaxRatio
+# RepCounter.framesBelowToArm: consecutive frames below the down line before a
+# rep counts as having gone down, so one wild frame cannot arm it.
+FRAMES_BELOW_TO_ARM = 2
 
 
 @dataclass
@@ -44,8 +47,8 @@ class Frame:
 
 
 def count_reps(frames: list[Frame], down: float, up: float, hysteresis: float,
-               gate_front: bool, standing_torso: bool) -> int:
-    waiting_down, n, standing = True, 0, None
+               gate_front: bool, standing_torso: bool, frames_below: int = FRAMES_BELOW_TO_ARM) -> int:
+    waiting_down, n, standing, run = True, 0, None, 0
     for f in frames:
         if gate_front:
             if standing_torso and f.angle is not None and f.angle > up and f.torso:
@@ -56,9 +59,11 @@ def count_reps(frames: list[Frame], down: float, up: float, hysteresis: float,
                     continue
         if f.angle is None:
             continue
-        if waiting_down and f.angle < down - hysteresis:
-            waiting_down = False
-        elif not waiting_down and f.angle > up + hysteresis:
+        if waiting_down:
+            run = run + 1 if f.angle < down - hysteresis else 0
+            if run >= frames_below:
+                waiting_down, run = False, 0
+        elif f.angle > up + hysteresis:
             n += 1
             waiting_down = True
     return n
