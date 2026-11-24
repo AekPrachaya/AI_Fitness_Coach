@@ -8,6 +8,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/demo_data_badge.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ class HomeHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userName = ref.watch(userNameProvider);
     final streakCount = ref.watch(streakProvider).current;
+    final showDemo = ref.watch(showDemoHistoryProvider);
     final tt = Theme.of(context).textTheme;
 
     return Padding(
@@ -116,6 +118,15 @@ class HomeHeader extends ConsumerWidget {
                       duration: 300.ms,
                       curve: Curves.easeOut,
                     ),
+
+                // Own line, not beside the streak: date + streak + pill would
+                // overflow a narrow phone. Absent entirely while demo is off.
+                if (showDemo) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  const DemoDataBadge()
+                      .animate(delay: 120.ms)
+                      .fadeIn(duration: 300.ms),
+                ],
               ],
             ),
           ),
