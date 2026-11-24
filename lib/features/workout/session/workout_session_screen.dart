@@ -11,6 +11,7 @@ import '../../../core/services/exercise_analyzer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/workout_repository.dart';
+import 'rep_pace.dart';
 import 'session_progress.dart';
 import 'session_stats.dart';
 import 'widgets/form_cue_banner.dart';
@@ -63,6 +64,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
   /// Set when reopening the camera after an interruption failed outright and
   /// the user has to be offered a retry.
   bool _cameraFailed = false;
+
+  /// Times each rep for the HUD's REP TIME readout.
+  final _pace = RepPace();
 
   /// Camera work is serialised through this chain: start, stop, switch and the
   /// lifecycle teardown all throw if they interleave on the same controller.
@@ -357,6 +361,11 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
     ref.listen<WorkoutSessionState>(
       workoutSessionNotifierProvider(widget.exerciseId),
       (prev, next) {
+        _pace.update(
+          status: next.status,
+          repCount: next.repCount,
+          now: DateTime.now(),
+        );
         if (next.status == SessionStatus.finished &&
             prev?.status != SessionStatus.finished) {
           _saveSession(next);
@@ -461,6 +470,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
                         ? '${session.jointAngle!.toStringAsFixed(0)}°'
                         : '--',
                     bodyFound: session.poses.isNotEmpty,
+                    repTimeText: _repTimeText(),
+                    formScore: _notifier.liveFormScore,
                   ),
                 ],
               ),
@@ -499,6 +510,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
         ],
       ),
     );
+  }
+
+  /// The last rep's duration for the HUD, e.g. `2.4s`; `--` before the first
+  /// rep of a set.
+  String _repTimeText() {
+    final rep = _pace.lastRep;
+    if (rep == null) return '--';
+    return '${(rep.inMilliseconds / 1000).toStringAsFixed(1)}s';
   }
 
   /// Fills the screen without distorting the image.

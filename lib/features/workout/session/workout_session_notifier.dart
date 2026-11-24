@@ -186,6 +186,11 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   /// state's `elapsedSeconds` is only filled in once the session finishes.
   int get liveElapsedSeconds => _clock.elapsedSeconds;
 
+  /// Mean form grade over the reps graded so far, 0–100 — the HUD's live
+  /// FORM readout. Zero until a rep has been graded. The state's
+  /// `avgFormScore` is only filled in once the session finishes.
+  double get liveFormScore => _stats.avgFormScore;
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Applies the workout's own set and rep targets. Only takes effect before
