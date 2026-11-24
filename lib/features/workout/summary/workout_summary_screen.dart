@@ -51,7 +51,11 @@ class WorkoutSummaryScreen extends ConsumerWidget {
             ? _EmptyState(workoutId: workoutId)
             : Stack(
                 children: [
-                  _SummaryBody(session: session, workoutId: workoutId),
+                  _SummaryBody(
+                    session: session,
+                    workoutId: workoutId,
+                    isPastSession: sessionId != null,
+                  ),
                   if (sessionId == null)
                     const Positioned.fill(child: ConfettiBurst()),
                 ],
@@ -64,10 +68,17 @@ class WorkoutSummaryScreen extends ConsumerWidget {
 // ── Body ─────────────────────────────────────────────────────────────────────
 
 class _SummaryBody extends StatelessWidget {
-  const _SummaryBody({required this.session, required this.workoutId});
+  const _SummaryBody({
+    required this.session,
+    required this.workoutId,
+    required this.isPastSession,
+  });
 
   final SessionData session;
   final String workoutId;
+
+  /// Opened from History rather than straight after a workout.
+  final bool isPastSession;
 
   @override
   Widget build(BuildContext context) {
@@ -80,9 +91,13 @@ class _SummaryBody extends StatelessWidget {
       // The session's own workout, not the route's: a replay link can name a
       // session from a different workout, and "Do It Again" must repeat what
       // is on screen.
-      _Actions(
-        workoutId: session.workoutId.isNotEmpty ? session.workoutId : workoutId,
-      ),
+      if (isPastSession)
+        const _BackToHistory()
+      else
+        _Actions(
+          workoutId:
+              session.workoutId.isNotEmpty ? session.workoutId : workoutId,
+        ),
     ];
 
     return SingleChildScrollView(
@@ -450,6 +465,22 @@ class _Actions extends StatelessWidget {
           onTap: () => context.go(RouteNames.home),
         ),
       ],
+    );
+  }
+}
+
+/// A past session has nothing to continue, so its only action leads back.
+/// Opened by deep link there is nothing to pop, so it goes to Progress.
+class _BackToHistory extends StatelessWidget {
+  const _BackToHistory();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSecondaryButton(
+      label: 'Back to History',
+      leadingIcon: Icons.arrow_back_rounded,
+      onTap: () =>
+          context.canPop() ? context.pop() : context.go(RouteNames.progress),
     );
   }
 }
