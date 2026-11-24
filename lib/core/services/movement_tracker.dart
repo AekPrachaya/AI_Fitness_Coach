@@ -8,7 +8,11 @@ enum MovementPhase { descending, ascending, still }
 /// depending entirely on which direction the user is moving, and the angle
 /// cannot say which.
 class MovementTracker {
-  MovementTracker({this.noiseFloor = 1.5});
+  MovementTracker({
+    this.noiseFloor = 1.5,
+    this.riseToTurn = 5.0,
+    this.rearmAbove,
+  });
 
   /// Degrees of change to ignore before calling the movement a direction.
   ///
@@ -17,7 +21,33 @@ class MovementTracker {
   /// every one of which would look like the bottom of a rep.
   final double noiseFloor;
 
+  /// How far the angle has to climb back above the lowest point of a descent
+  /// before the descent counts as over.
+  ///
+  /// Wobble does not stop while the user is moving either. Taken against the
+  /// previous frame alone, a two-degree flicker on the way down read as the
+  /// bottom of the rep, and the session told users who were still descending
+  /// to squat deeper: on recorded footage, 4 of 23 reps that went below 90°
+  /// were logged as shallow. Measured from the low point instead, 3° still
+  /// let 2 through and 5° none, without missing any rep that really stopped
+  /// short.
+  final double riseToTurn;
+
+  /// After a turnaround, no other is reported until the angle has climbed
+  /// past this — the top of the movement, the same line the rep counter
+  /// waits for. Null reports every turnaround.
+  ///
+  /// One rep has one depth. On the phone, ML Kit's angle dipped a degree or
+  /// two on the way back up, which read as a fresh descent and, five degrees
+  /// later, a second bottom at 110-130°: a rep that went down to 70° was
+  /// graded at its second "bottom", called shallow, and the cue stayed up
+  /// into the next rep.
+  final double? rearmAbove;
+
+  bool _armed = true;
   double? _last;
+  double? _low;
+  double? _bottomAngle;
   MovementPhase _phase = MovementPhase.still;
   bool _bottomedOut = false;
 
@@ -27,12 +57,34 @@ class MovementTracker {
   /// and the only moment, at which how deep this rep went is a settled fact.
   bool get bottomedOut => _bottomedOut;
 
+  /// The lowest angle of the descent that just turned, set when
+  /// [bottomedOut] is. Depth is judged against this rather than the current
+  /// angle, which by then is already [riseToTurn] degrees on the way back up.
+  double? get bottomAngle => _bottomAngle;
+
   void update(double angle) {
     _bottomedOut = false;
+    final rearm = rearmAbove;
+    if (rearm != null && angle > rearm) _armed = true;
 
     final last = _last;
     if (last == null) {
       _last = angle;
+      return;
+    }
+
+    if (_phase == MovementPhase.descending) {
+      final low = angle < _low! ? angle : _low!;
+      _low = low;
+      if (angle - low >= riseToTurn) {
+        if (_armed) {
+          _bottomedOut = true;
+          _bottomAngle = low;
+        }
+        if (rearm != null) _armed = false;
+        _phase = MovementPhase.ascending;
+        _last = angle;
+      }
       return;
     }
 
@@ -42,17 +94,18 @@ class MovementTracker {
     _last = angle;
     if (delta < 0) {
       _phase = MovementPhase.descending;
-      return;
+      _low = angle;
+    } else {
+      _phase = MovementPhase.ascending;
     }
-
-    // Rising. A rise that follows a descent is the turnaround.
-    if (_phase == MovementPhase.descending) _bottomedOut = true;
-    _phase = MovementPhase.ascending;
   }
 
   /// Starts over, forgetting which way the joint was going.
   void reset() {
     _last = null;
+    _low = null;
+    _bottomAngle = null;
+    _armed = true;
     _phase = MovementPhase.still;
     _bottomedOut = false;
   }

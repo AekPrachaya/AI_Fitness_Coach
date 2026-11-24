@@ -15,12 +15,18 @@ of the movement, as in the app; --no-standing-torso uses this frame's alone
 (the behaviour before 2026-11-09).
 Writes sweep.csv (every combination) and per_video.csv (the best one) into
 the pose_out folder.
+
+With --tune-group the thresholds are chosen on that group of labels.csv
+alone and --test-group reports how they hold up on people never tuned on:
+    python sweep_thresholds.py pose_out labels.csv --gate-front \\
+        --tune-group tune --test-group test --by sex --participants participants.csv
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,14 +99,39 @@ def main() -> None:
     p.add_argument("--up", default="140:171:5", help="start:stop:step")
     p.add_argument("--gate-front", action="store_true")
     p.add_argument("--no-standing-torso", action="store_true")
+    p.add_argument("--tune-group", help="choose thresholds on this labels.csv group only")
+    p.add_argument("--test-group", help="then report the chosen thresholds on this group")
+    p.add_argument("--by", help="break the chosen thresholds down by a column (person, code, sex, …)")
+    p.add_argument("--participants", type=Path, help="CSV keyed by person, adds e.g. sex for --by")
     args = p.parse_args()
 
     with args.labels.open() as f:
-        labels = {Path(r["video"]).stem: int(r["reps"]) for r in csv.DictReader(f) if r["reps"].strip()}
+        meta = {Path(r["video"]).stem: r for r in csv.DictReader(f)
+                if r.get("video", "").strip() and r.get("reps", "").strip()}
+    if args.participants:
+        with args.participants.open() as f:
+            people = {r["person"]: r for r in csv.DictReader(f)}
+        for r in meta.values():
+            for k, v in people.get(r.get("person", ""), {}).items():
+                r.setdefault(k, v)
+    labels = {v: int(r["reps"]) for v, r in meta.items()}
     column = f"angle_{args.angle}"
     frames = {v: load_frames(args.out, v, column) for v in labels}
     standing = not args.no_standing_torso
-    total = sum(labels.values())
+
+    def in_group(name):
+        return [v for v in labels if not name or meta[v].get("group") == name]
+
+    tune = in_group(args.tune_group)
+    if not tune:
+        sys.exit(f"no labelled videos in group {args.tune_group!r}")
+
+    def score(videos, counts):
+        total = sum(labels[v] for v in videos)
+        wrong = sum(abs(counts[v] - labels[v]) for v in videos)
+        return {"accuracy_pct": round(100 * (1 - wrong / max(total, 1)), 1),
+                "exact_videos": sum(counts[v] == labels[v] for v in videos),
+                "wrong_reps": wrong, "reps": total, "videos": len(videos)}
 
     def span(spec: str):
         a, b, c = (float(x) for x in spec.split(":"))
@@ -113,35 +144,45 @@ def main() -> None:
                 continue
             counts = {v: count_reps(f, down, up, args.hysteresis, args.gate_front, standing)
                       for v, f in frames.items()}
-            wrong = sum(abs(counts[v] - labels[v]) for v in labels)
-            results.append({
-                "down": down, "up": up,
-                "accuracy_pct": round(100 * (1 - wrong / total), 1),
-                "exact_videos": sum(counts[v] == labels[v] for v in labels),
-                "wrong_reps": wrong,
-                "_counts": counts,
-            })
+            results.append({"down": down, "up": up, **score(tune, counts), "_counts": counts})
     results.sort(key=lambda r: (r["wrong_reps"], -r["exact_videos"]))
 
     with (args.out / "sweep.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["down", "up", "accuracy_pct", "exact_videos", "wrong_reps"])
         w.writeheader()
-        w.writerows({k: v for k, v in r.items() if not k.startswith("_")} for r in results)
+        w.writerows({k: r[k] for k in w.fieldnames} for r in results)
 
     best = results[0]
+    counts = best["_counts"]
     with (args.out / "per_video.csv").open("w", newline="") as f:
+        extra = [k for k in ("person", "group", "code", "sex") if any(k in meta[v] for v in labels)]
         w = csv.writer(f)
-        w.writerow(["video", "true_reps", "counted", "error"])
+        w.writerow(["video", *extra, "true_reps", "counted", "error"])
         for v in labels:
-            w.writerow([v, labels[v], best["_counts"][v], best["_counts"][v] - labels[v]])
+            w.writerow([v, *(meta[v].get(k, "") for k in extra), labels[v], counts[v], counts[v] - labels[v]])
 
-    print(f"{len(labels)} videos, {total} reps, angle {args.angle}"
+    tuned_on = f"group {args.tune_group!r}" if args.tune_group else "all videos"
+    print(f"tuned on {tuned_on}: {len(tune)} videos, {best['reps']} reps, angle {args.angle}"
           f"{', front frames gated' if args.gate_front else ''}"
           f"{' (current torso only)' if args.gate_front and not standing else ''}")
-    for r in results[:10]:
+    for r in results[:5]:
         print(f"  down {r['down']:g} / up {r['up']:g}: {r['accuracy_pct']}% "
-              f"({r['exact_videos']}/{len(labels)} videos exact)")
+              f"({r['exact_videos']}/{r['videos']} videos exact)")
 
+    chosen = f"down {best['down']:g} / up {best['up']:g}"
+    if args.test_group:
+        test = in_group(args.test_group)
+        t = score(test, counts)
+        print(f"\nheld-out group {args.test_group!r} at {chosen}: {t['accuracy_pct']}% "
+              f"({t['wrong_reps']} wrong of {t['reps']} reps, {t['exact_videos']}/{t['videos']} videos exact)")
+    if args.by:
+        print(f"\nby {args.by} at {chosen}:")
+        buckets = {}
+        for v in labels:
+            buckets.setdefault(meta[v].get(args.by, ""), []).append(v)
+        for key in sorted(buckets):
+            b = score(buckets[key], counts)
+            print(f"  {key or '-':<12} {b['accuracy_pct']:>5}%  ({b['reps']} reps, {b['videos']} videos)")
 
 if __name__ == "__main__":
     main()
