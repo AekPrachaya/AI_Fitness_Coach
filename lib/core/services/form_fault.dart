@@ -52,6 +52,11 @@ enum FormFault {
     cue: 'ดันสะโพกไปข้างหลัง',
     severity: FormSeverity.risky,
   ),
+  squatHeelLift(
+    label: 'ส้นเท้ายก',
+    cue: 'กดส้นเท้าให้ติดพื้น',
+    severity: FormSeverity.risky,
+  ),
   squatShallow(
     label: 'ลงไม่ลึกพอ',
     cue: 'ย่อลงอีก ให้ต้นขาขนานพื้น',

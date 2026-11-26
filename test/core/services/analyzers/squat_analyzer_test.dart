@@ -9,7 +9,8 @@ import '../../../support/pose_fixtures.dart';
 
 void main() {
   late SquatAnalyzer analyzer;
-  setUp(() => analyzer = SquatAnalyzer());
+  // The angle-rule path; the model path has its own group at the end.
+  setUp(() => analyzer = SquatAnalyzer(useFormModel: false));
 
   // Vertical shin (knee directly above ankle) and vertical torso (shoulder
   // directly above hip) — the reference "clean squat" geometry.
@@ -137,6 +138,68 @@ void main() {
         counter.update(angle.toDouble());
       }
       expect(counter.count, 0);
+    });
+  });
+
+  group('with the form model', () {
+    final model = SquatAnalyzer(useFormModel: true);
+
+    // Whole side-on bodies at the bottom of a squat, facing right: the
+    // median pose of each class in the training images, in pixels.
+    Pose body(List<(double, double)> p) => poseOf(withMirroredSide([
+          lm(PoseLandmarkType.nose, p[0].$1 + 40, p[0].$2),
+          for (final (i, t) in const [
+            PoseLandmarkType.leftEar, PoseLandmarkType.leftShoulder,
+            PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee,
+            PoseLandmarkType.leftAnkle,
+          ].indexed)
+            lm(t, p[i].$1, p[i].$2),
+        ]));
+    final good = body(const [
+      (612, 255), (576, 334), (450, 520), (606, 547), (522, 696),
+    ]);
+    final bentOver = body(const [
+      (714, 381), (647, 421), (450, 520), (621, 566), (556, 729),
+    ]);
+    final liftedHeels = body(const [
+      (600, 260), (569, 329), (450, 520), (607, 553), (492, 681),
+    ]);
+
+    test('still grades depth by rule', () {
+      final result = model.analyze(good, 110);
+      expect(result.faults, contains(FormFault.squatShallow));
+    });
+
+    test('stays silent while standing, like the rules', () {
+      expect(model.analyze(good, 150), FormResult.notEvaluated);
+    });
+
+    test('passes a typical good squat', () {
+      expect(model.analyze(good, 85).faults, isEmpty);
+    });
+
+    test('flags lifted heels', () {
+      expect(model.analyze(liftedHeels, 85).faults, [FormFault.squatHeelLift]);
+    });
+
+    test('flags a back folded over', () {
+      expect(model.analyze(bentOver, 85).faults, [FormFault.squatTorsoLean]);
+    });
+
+    test('falls back to the rules when it cannot see the whole leg', () {
+      // No ear, heel or toe: the model must not guess, but the rules need
+      // only shoulder, hip, knee and ankle and still catch what they can.
+      final result = model.analyze(stackedPose(kneeX: 200, shoulderX: 300), 85);
+      expect(result.faults,
+          containsAll([FormFault.squatTorsoLean, FormFault.squatKneeOverToe]));
+      expect(result.faults, isNot(contains(FormFault.squatHeelLift)));
+    });
+
+    test('never raises the knee-over-toe rule it replaces', () {
+      for (final pose in [good, liftedHeels]) {
+        expect(model.analyze(pose, 85).faults,
+            isNot(contains(FormFault.squatKneeOverToe)));
+      }
     });
   });
 }

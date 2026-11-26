@@ -238,6 +238,16 @@ class _StatsGrid extends StatelessWidget {
             ),
           ],
         ),
+        // Older sessions and the demo history were never timed.
+        if (session.hasTempo) ...[
+          const SizedBox(height: AppSpacing.md),
+          _StatTile(
+            icon: Icons.speed_rounded,
+            label: 'TEMPO · ลง / ขึ้น ต่อครั้ง',
+            value: '${session.avgDescentSeconds.toStringAsFixed(1)}s ↓   '
+                '${session.avgAscentSeconds.toStringAsFixed(1)}s ↑',
+          ),
+        ],
       ],
     );
   }

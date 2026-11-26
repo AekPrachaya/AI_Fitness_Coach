@@ -9,6 +9,7 @@ import '../../../core/services/form_alerts.dart';
 import '../../../core/services/form_coach.dart';
 import '../../../core/services/form_speech.dart';
 import '../../../core/services/landmark_smoother.dart';
+import '../../../core/services/rep_tempo.dart';
 import '../../../core/services/movement_tracker.dart';
 import '../../../core/services/pose_detection_service.dart';
 import '../../../core/services/rep_counter.dart';
@@ -55,6 +56,8 @@ class WorkoutSessionState {
     this.elapsedSeconds = 0,
     this.avgFormScore = 0,
     this.mostCommonError = '',
+    this.avgDescentSeconds = 0,
+    this.avgAscentSeconds = 0,
   });
 
   final SessionStatus status;
@@ -90,6 +93,10 @@ class WorkoutSessionState {
   /// The fault seen in the most reps; empty when the workout was clean.
   final String mostCommonError;
 
+  /// Mean seconds down and back up per timed rep; 0 when none was timed.
+  final double avgDescentSeconds;
+  final double avgAscentSeconds;
+
   /// Reps done so far, the set in progress included.
   ///
   /// A finished set is folded into [totalReps] while its [repCount] stays on
@@ -122,6 +129,8 @@ class WorkoutSessionState {
     int? elapsedSeconds,
     double? avgFormScore,
     String? mostCommonError,
+    double? avgDescentSeconds,
+    double? avgAscentSeconds,
     // `x ?? this.x` cannot express "set back to null", so clearing the
     // frame-scoped fields (body left the frame) needs explicit flags.
     bool clearJointAngle = false,
@@ -147,6 +156,8 @@ class WorkoutSessionState {
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       avgFormScore: avgFormScore ?? this.avgFormScore,
       mostCommonError: mostCommonError ?? this.mostCommonError,
+      avgDescentSeconds: avgDescentSeconds ?? this.avgDescentSeconds,
+      avgAscentSeconds: avgAscentSeconds ?? this.avgAscentSeconds,
     );
   }
 }
@@ -180,6 +191,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
   final _coach = FormCoach();
   late final _movement = MovementTracker(rearmAbove: _analyzer.upThreshold);
   final _smoother = LandmarkSmoother();
+  late final _tempo = TempoTracker(top: _analyzer.upThreshold);
   final _poseService = PoseDetectionService();
   final _stats = SessionStats();
   final _clock = SessionClock();
@@ -251,6 +263,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _coach.reset();
       _movement.reset();
       _smoother.reset();
+      _tempo.reset();
       state = state.copyWith(
         poses: [],
         clearJointAngle: true,
@@ -309,6 +322,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       }
       angle = calculateAngle(a, b, c);
       _movement.update(angle);
+      _tempo.update(angle, DateTime.now());
       // Faults the current point in the rep cannot judge are dropped before
       // anything sees them — the live cue and the session tally alike.
       // At the turnaround the angle is already on its way back up; depth is
@@ -324,6 +338,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       final repDone = _repCounter.update(angle);
       if (repDone) {
         _stats.commitRep();
+        if (_tempo.takeCompleted() case final tempo?) _stats.addTempo(tempo);
         final newCount = _repCounter.count;
         if (newCount >= state.targetReps) {
           await _onSetComplete();
@@ -404,6 +419,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _coach.reset();
       _movement.reset();
       _smoother.reset();
+      _tempo.reset();
       _alerts.silence();
       state = state.copyWith(
         status: SessionStatus.paused,
@@ -420,6 +436,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       _coach.reset();
       _movement.reset();
       _smoother.reset();
+      _tempo.reset();
       state = state.copyWith(status: SessionStatus.tracking);
     }
   }
@@ -475,6 +492,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _coach.reset();
     _movement.reset();
     _smoother.reset();
+    _tempo.reset();
     _alerts.silence();
 
     final setReps = _repCounter.count;
@@ -507,6 +525,8 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
       elapsedSeconds: _clock.elapsedSeconds,
       avgFormScore: _stats.avgFormScore,
       mostCommonError: _stats.mostCommonError,
+      avgDescentSeconds: _stats.avgDescentSeconds,
+      avgAscentSeconds: _stats.avgAscentSeconds,
     );
   }
 
@@ -528,6 +548,7 @@ class WorkoutSessionNotifier extends StateNotifier<WorkoutSessionState> {
     _coach.reset();
     _movement.reset();
     _smoother.reset();
+    _tempo.reset();
     state = state.copyWith(
       status: SessionStatus.tracking,
       currentSet: state.currentSet + 1,

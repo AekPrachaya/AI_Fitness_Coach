@@ -2,8 +2,26 @@ import 'dart:math' as math;
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../exercise_analyzer.dart';
 import '../form_fault.dart';
+import '../form_model/squat_form_classifier.dart';
 
 class SquatAnalyzer extends ExerciseAnalyzer {
+  /// [useFormModel] picks how posture is judged. Depth is a rule either way.
+  ///
+  /// * true — the trained form model (SquatFormClassifier) judges the back
+  ///   and the heels. On held-out people it caught 86% of bad-back and 100%
+  ///   of heel-lift images, warning on 2.6% of good ones, where the rules
+  ///   below caught 47% and 53%; the app had no heel check of its own.
+  /// * false — the original angle rules: torso lean and knee-over-toe.
+  ///
+  /// Defaults to the `FORM_MODEL` dart-define (on unless set to false), so
+  /// the two can be compared on the phone without a code change:
+  /// `flutter run --dart-define=FORM_MODEL=false`.
+  SquatAnalyzer({bool? useFormModel})
+      : useFormModel = useFormModel ??
+            const bool.fromEnvironment('FORM_MODEL', defaultValue: true);
+
+  final bool useFormModel;
+
   @override PoseLandmarkType get primaryA => PoseLandmarkType.leftHip;
   @override PoseLandmarkType get primaryB => PoseLandmarkType.leftKnee;
   @override PoseLandmarkType get primaryC => PoseLandmarkType.leftAnkle;
@@ -29,19 +47,45 @@ class SquatAnalyzer extends ExerciseAnalyzer {
   static const _shinForwardMax   = 40.0;
   static const _torsoLeanMax     = 55.0;
 
+  /// How sure the model must be before a fault is raised: more likely than
+  /// not. Deliberately not tuned — the only images that could tune it are the
+  /// test set — and FormCoach's three-frame confirmation filters further.
+  static const modelConfidence = 0.5;
+
   @override
   FormResult analyze(Pose pose, double angle) {
     if (angle > _analyzeThreshold) {
       return FormResult.notEvaluated;
     }
 
+    final faults = <FormFault>[
+      if (angle > _depthThreshold) FormFault.squatShallow,
+      ...useFormModel ? _modelFaults(pose) : _ruleFaults(pose),
+    ];
+    return ExerciseAnalyzer.verdict(faults);
+  }
+
+  /// The model's verdict when it can see the whole leg, else the rules'.
+  ///
+  /// Feet out of frame are common — a phone propped close, a deep squat
+  /// pushing the toes off the bottom edge — and the rules need only the
+  /// shoulder, hip, knee and ankle, so they still say something useful.
+  List<FormFault> _modelFaults(Pose pose) {
+    final p = SquatFormClassifier.predict(pose.landmarks);
+    if (p == null) return _ruleFaults(pose);
+    return [
+      if (p.probabilityOf(SquatFormClass.badBack) > modelConfidence)
+        FormFault.squatTorsoLean,
+      if (p.probabilityOf(SquatFormClass.badHeel) > modelConfidence)
+        FormFault.squatHeelLift,
+    ];
+  }
+
+  List<FormFault> _ruleFaults(Pose pose) {
     final lms = pose.landmarks;
     final faults = <FormFault>[];
 
-    // 1. Depth
-    if (angle > _depthThreshold) faults.add(FormFault.squatShallow);
-
-    // 2. Knee over toe
+    // Knee over toe
     final leg = ExerciseAnalyzer.bestSide(
       lms,
       const [PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle],
@@ -55,7 +99,7 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    // 3. Torso lean
+    // Torso lean
     final torso = ExerciseAnalyzer.bestSide(
       lms,
       const [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
@@ -69,6 +113,6 @@ class SquatAnalyzer extends ExerciseAnalyzer {
       }
     }
 
-    return ExerciseAnalyzer.verdict(faults);
+    return faults;
   }
 }

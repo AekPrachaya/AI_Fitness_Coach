@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -33,6 +34,12 @@ from pathlib import Path
 
 VIDEO_EXTS = {".mov", ".mp4", ".m4v"}
 DRAFT = "labels_draft.csv"
+
+
+def clip_number(path: Path) -> int | None:
+    """The plan number in a file name like "คลิปที่ 4.mov" or "clip_4.mov"."""
+    m = re.search(r"(\d+)\s*$", path.stem)
+    return int(m.group(1)) if m and not path.stem.upper().startswith("IMG") else None
 
 
 def creation_time(path: Path) -> str:
@@ -116,8 +123,21 @@ def ingest(args) -> None:
             continue
         clips = sorted((c for c in folder.rglob("*") if c.suffix.lower() in VIDEO_EXTS),
                        key=creation_time)
+        if not clips:
+            print(f"{person}: no clips yet")
+            continue
         planned = plan.get(person, [])
-        matches = len(clips) == len(planned)
+        by_no = {r["clip_no"]: r for r in planned}
+        # Files named after their place in the plan ("คลิปที่ 4.mov", "clip 4")
+        # pair by that number, so skipped clips do not shift the rest.
+        numbered = [clip_number(c) for c in clips]
+        if planned and all(n is not None and str(n) in by_no for n in numbered):
+            pairs = [by_no[str(n)] for n in numbered]
+        elif len(clips) == len(planned):
+            pairs = planned
+        else:
+            pairs = None
+        matches = pairs is not None
         num = int(person.lstrip("P"))
         linked = []
         for i, clip in enumerate(clips, 1):
@@ -127,7 +147,7 @@ def ingest(args) -> None:
                 link.unlink()
             link.symlink_to(clip.resolve())
             linked.append(link)
-            p = planned[i - 1] if matches else {}
+            p = pairs[i - 1] if matches else {}
             draft.append({
                 # The plan's count: 5, or 0 for a dip too small to be a rep.
                 "video": name, "reps": p.get("reps", ""), "reps_auto": "", "person": person,

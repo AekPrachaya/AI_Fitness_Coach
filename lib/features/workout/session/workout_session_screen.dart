@@ -322,6 +322,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen>
       'avg_form_score': state.avgFormScore,
       'estimated_calories': calories,
       'most_common_error': state.mostCommonError,
+      'avg_descent_seconds': state.avgDescentSeconds,
+      'avg_ascent_seconds': state.avgAscentSeconds,
       // Left to the AI backend; no coaching text is generated on-device.
       'ai_tip': '',
       'exercises': [

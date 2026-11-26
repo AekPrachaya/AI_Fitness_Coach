@@ -142,6 +142,8 @@ class RepCounter:
     _top_t: float = 0.0
     _bottom_t: float = 0.0
     _min: float = math.inf
+    _run: int = 0
+    frames_below: int = 2  # RepCounter.framesBelowToArm
 
     def update(self, t: float, angle: float) -> None:
         if self.phase == "waitingDown":
@@ -149,13 +151,19 @@ class RepCounter:
             if angle > self.up:
                 self._top_t = t
             if angle < self.down - self.hysteresis:
-                self.phase, self._min, self._bottom_t = "down", angle, t
+                self._run += 1
+                if self._run == 1 or angle < self._min:
+                    self._min, self._bottom_t = angle, t
+            else:
+                self._run, self._min = 0, math.inf
+            if self._run >= self.frames_below:
+                self.phase, self._run = "down", 0
         else:
             if angle < self._min:
                 self._min, self._bottom_t = angle, t
             if angle > self.up + self.hysteresis:
                 self.reps.append(Rep(self._top_t, self._bottom_t, t, self._min))
-                self.phase, self._top_t = "waitingDown", t
+                self.phase, self._top_t, self._min = "waitingDown", t, math.inf
 
 
 def ensure_model() -> Path:

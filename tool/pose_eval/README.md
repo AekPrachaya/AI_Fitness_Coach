@@ -50,3 +50,28 @@ python $T/form_eval.py $R/pose_out_2 $R/Squat-dataset-2/labels_draft.csv --group
 `reps` in the plan is 5, or 0 for clip code E3 (a dip too small to count).
 Never move a threshold because of a test-group result — that turns the test
 group into a second tune group and the number reported stops meaning anything.
+
+## The squat form model
+
+A logistic regression trained on pose landmarks from labelled images
+(good / bad back / bad heel), run in the app by
+`lib/core/services/form_model/`. The weights there are generated — retrain
+and re-export rather than editing them.
+
+```bash
+D=report_findings/data/classifier_2026-11   # kept out of the repo
+# 1. Every image's 33 landmarks, once
+python $T/image_landmarks.py ~/Downloads/Dataset --out $D/image_landmarks.npz
+# 2. Group frames by scene, so one recording never sits on both sides of a fold
+python $T/image_scenes.py ~/Downloads/Dataset --out $D/image_scenes.csv
+# 3. Cross-validate by scene, score once on test, compare with the rules
+python $T/train_form_classifier.py $D/image_landmarks.npz $D/image_scenes.csv \
+    --export $D/form_model.json --report $D/results.txt
+# 4. Weights → Dart, and the parity fixture the Dart test checks against
+python $T/export_form_model.py $D/form_model.json \
+    --dart lib/core/services/form_model/squat_form_model.g.dart \
+    --fixture test/fixtures/squat_form_parity.json
+```
+
+`form_features.py` and `form_features.dart` must stay in step; the parity
+test fails if they drift.
