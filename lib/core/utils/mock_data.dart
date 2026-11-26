@@ -67,10 +67,25 @@ abstract class MockData {
   static const int _bestRunStart = 30;
   static const int _bestRunEnd = 40;
 
+  /// Calendar day the demo history was last generated for, as `yyyy-mm-dd`.
+  static const String seededOnKey = 'seeded_on';
+
   // ── Method 3: Seed demo sessions across the past [seedDays] days ───────────
-  static Future<void> seedProgressHistory() async {
+  /// Regenerates the demo history whenever it was built for another day, so
+  /// it always runs up to today (or yesterday, when today is a rest day). Generated once and kept, it would
+  /// freeze on the install date: a few days later "This Week" reads zero and
+  /// the current streak is broken — exactly what a demonstration shows first.
+  ///
+  /// Only the `'sessions'` key is rewritten; recorded `real_session_*` rows
+  /// are never touched. [now] is for tests.
+  static Future<void> seedProgressHistory({DateTime? now}) async {
     final box = Hive.box(boxSessionHistory);
-    if (box.get('seed_version') == seedVersion) return;
+    final today = now ?? DateTime.now();
+    final todayKey = _dayKey(today);
+    if (box.get('seed_version') == seedVersion &&
+        box.get(seededOnKey) == todayKey) {
+      return;
+    }
 
     const exerciseIds = ['push_ups', 'squats', 'deadlifts', 'bicep_curls'];
     const exerciseNames = ['Push-ups', 'Squats', 'Deadlifts', 'Bicep Curls'];
@@ -83,7 +98,6 @@ abstract class MockData {
     ];
 
     final sessions = <Map<String, dynamic>>[];
-    final now = DateTime.now();
 
     // Rotates over emitted sessions, not over the calendar: keying the exercise
     // off the day would collide with the rest cycle and starve one exercise.
@@ -106,17 +120,18 @@ abstract class MockData {
       final score = (62.0 + progress * 26 + (i % 5) * 2).clamp(60.0, 97.0);
       // 10–50 min, so day intensity spans every heatmap shade.
       final durationSeconds = 600 + (i % 9) * 300;
+      final reps = 36 + (i % 6) * 4;
 
       void addSession(String suffix, int hourOffset) {
         sessions.add({
           'id': 'mock_session_$i$suffix',
           'workout_id': exerciseIds[idx],
           'workout_name': exerciseNames[idx],
-          'completed_at': now
+          'completed_at': today
               .subtract(Duration(days: i, hours: hourOffset))
               .toIso8601String(),
           'duration_seconds': durationSeconds,
-          'total_reps': 36 + (i % 6) * 4,
+          'total_reps': reps,
           'avg_form_score': score,
           'estimated_calories': 110 + (i % 7) * 15,
           'most_common_error': 'Keep knees aligned',
@@ -126,7 +141,9 @@ abstract class MockData {
               'exercise_id': exerciseIds[idx],
               'exercise_name': exerciseNames[idx],
               'sets_completed': 3,
-              'total_reps': 36,
+              // The session's own total — a lone exercise cannot disagree
+              // with the session it makes up.
+              'total_reps': reps,
               'avg_form_score': score,
               'most_common_error': 'Keep knees aligned',
             },
@@ -141,9 +158,16 @@ abstract class MockData {
 
     await box.put('sessions', sessions);
     await box.put('seed_version', seedVersion);
+    await box.put(seededOnKey, todayKey);
     // Retire the pre-versioning flag so it cannot mask a future re-seed.
     await box.delete('seeded');
   }
+
+  /// `yyyy-mm-dd` of [d]'s local calendar day.
+  static String _dayKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   // ── Method 4: Seed 8 weekly body-metric entries ─────────────────────────────
   // Idempotent — checks 'metrics_seeded' flag before writing.
